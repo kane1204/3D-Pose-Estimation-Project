@@ -1,5 +1,6 @@
 from torch import nn
 class LiftingNet(nn.Module):
+    # Based of https://arxiv.org/abs/1705.03098
     def __init__(self,n_inputs,hidden,n_output):
         super(LiftingNet, self).__init__()
         self.flatten = nn.Flatten()
