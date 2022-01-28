@@ -30,9 +30,15 @@ class BugDataset(Dataset):
             if x['visibility'][self.center-1]==1:
                 new_df = new_df.append(x)
                 new_df.reset_index(drop=True, inplace=True)
-
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(np.array)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(np.array)
+
+        # Fix BBOXS
+        new_df["bounding_box"] = new_df['key_points_2D'].apply(self.bbox_fix)
+
+        # TODO: Create some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
+
+        # TODO: Create code that centralises the image around keypoint 3 so the middle of the image is at 0,0
 
         # Centralising dataset around center keypoint center
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.centralise_2d)
@@ -133,7 +139,7 @@ class BugDataset(Dataset):
 
         for x in range(len(fixed_array_3d[0])):
             self.std_3d.append(np.std(fixed_array_3d[:,x], axis=0))
-            self.means_3d.append(np.mean(fixed_array_3d[:,x], axis=0))
+            self.means_3d.app.end(np.mean(fixed_array_3d[:,x], axis=0))
         self.means_3d = np.array(self.means_3d).reshape((62,3))
         self.std_3d = np.array(self.std_3d).reshape((62,3))
 
@@ -145,6 +151,13 @@ class BugDataset(Dataset):
         gridy, gridx = np.mgrid[0:size_h, 0:size_w]
         D2 = (gridx - center_x) ** 2 + (gridy - center_y) ** 2
         return np.exp(-D2 / 2.0 / sigma / sigma)
+    
+    def bbox_fix(self, keypoints):
+        padding = 1
+        x_coordinates, y_coordinates = zip(*keypoints)
+        x_coordinates = [i for i in x_coordinates if i != 0]
+        y_coordinates = [i for i in y_coordinates if i != 0]
+        return [round(min(x_coordinates)-padding), round(min(y_coordinates)-padding), round(max(x_coordinates)+padding), round(max(y_coordinates)+padding)]
         
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
