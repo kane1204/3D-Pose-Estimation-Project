@@ -22,6 +22,8 @@ class BugDataset(Dataset):
         self.means_3d = []
         self.std_2d =  []
         self.std_3d = []
+        self.stride = 8
+        self.sigma = 3.0
         # Remove all the datapoints that doesnt have center keypoint visible. 
         new_df = pd.DataFrame()
         for col, x in df.iterrows():
@@ -54,11 +56,32 @@ class BugDataset(Dataset):
         img_name = os.path.join(self.root_dir,
                                 self.bugs_frame.iloc[idx, 0])
         image = io.imread(img_name)
+        height, width, _ = image.shape
         df_columns = self.bugs_frame.columns.values.tolist()
         sample = {'image':image}
  
         for x in range(len(df_columns)):    
             sample[df_columns[x]] = self.bugs_frame.iloc[idx,x]
+
+        # Create Heatmap guassian for each keypoint
+        print(sample['key_points_2D'])
+        print(sample['key_points_2D'][2,0], sample['key_points_2D'][2,0])
+        sample['heatmap'] = np.zeros((round(height/self.stride), round(width/self.stride), len(sample['key_points_2D']) + 1), dtype=np.float32)
+        for i in range(len(sample['key_points_2D'])):
+            x = int(sample['key_points_2D'][i][0]) * 1.0 / self.stride
+            y = int(sample['key_points_2D'][i][1]) * 1.0 / self.stride
+            heat_map = self.guassian_kernel(size_h=height / self.stride, size_w=width / self.stride, center_x=x, center_y=y, sigma=self.sigma)
+            heat_map[heat_map > 1] = 1
+            heat_map[heat_map < 0.0099] = 0
+            sample['heatmap'][:, :, i + 1] = heat_map
+
+        sample['heatmap'][:, :, 0] = 1.0 - np.max(sample['heatmap'][:, :, 1:], axis=2)
+
+        sample['centermap'] = np.zeros((height, width, 1), dtype=np.float32)
+        center_map = self.guassian_kernel(size_h=height, size_w=width, center_x=sample['key_points_2D'][2,0], center_y=sample['key_points_2D'][2,1], sigma=3)
+        center_map[center_map > 1] = 1
+        center_map[center_map < 0.0099] = 0
+        sample['centermap'][:, :, 0] = center_map
 
         if self.transform:
             sample = self.transform(sample)
@@ -118,6 +141,10 @@ class BugDataset(Dataset):
         df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
         return df
 
+    def guassian_kernel(self, size_w, size_h, center_x, center_y, sigma):
+        gridy, gridx = np.mgrid[0:size_h, 0:size_w]
+        D2 = (gridx - center_x) ** 2 + (gridy - center_y) ** 2
+        return np.exp(-D2 / 2.0 / sigma / sigma)
         
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
