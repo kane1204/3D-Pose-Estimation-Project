@@ -139,7 +139,7 @@ class BugDataset(Dataset):
 
         for x in range(len(fixed_array_3d[0])):
             self.std_3d.append(np.std(fixed_array_3d[:,x], axis=0))
-            self.means_3d.app.end(np.mean(fixed_array_3d[:,x], axis=0))
+            self.means_3d.append(np.mean(fixed_array_3d[:,x], axis=0))
         self.means_3d = np.array(self.means_3d).reshape((62,3))
         self.std_3d = np.array(self.std_3d).reshape((62,3))
 
