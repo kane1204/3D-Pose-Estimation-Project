@@ -70,8 +70,8 @@ class BugDataset(Dataset):
             sample[df_columns[x]] = self.bugs_frame.iloc[idx,x]
 
         # Create Heatmap guassian for each keypoint
-        print(sample['key_points_2D'])
-        print(sample['key_points_2D'][2,0], sample['key_points_2D'][2,0])
+        # print(sample['key_points_2D'])
+        # print(sample['key_points_2D'][2,0], sample['key_points_2D'][2,0])
         sample['heatmap'] = np.zeros((round(height/self.stride), round(width/self.stride), len(sample['key_points_2D']) + 1), dtype=np.float32)
         for i in range(len(sample['key_points_2D'])):
             x = int(sample['key_points_2D'][i][0]) * 1.0 / self.stride
