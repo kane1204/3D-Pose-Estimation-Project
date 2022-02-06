@@ -1,4 +1,6 @@
 import os
+from tkinter import S
+import cv2
 import numpy as np
 import pandas as pd
 from skimage import io
@@ -17,6 +19,7 @@ class BugDataset(Dataset):
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
+        self.xy = 640
         self.center = 3
         self.means_2d = []
         self.means_3d = []
@@ -36,12 +39,23 @@ class BugDataset(Dataset):
         # Fix BBOXS
         new_df["bounding_box"] = new_df['key_points_2D'].apply(self.bbox_fix)
 
-        # TODO: Create some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
+        # Created some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
+        self.transform_x_y = 368
+        self.scale_percent = (self.transform_x_y/self.xy)*100
+
+        #  Image resizing occurs later on in the get item stage
+
+        # Second Correct the 2D keypoint
+        new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
+        new_df["bounding_box"] =  new_df["bounding_box"].apply(self.scale_data)
 
         # TODO: Create code that centralises the image around keypoint 3 so the middle of the image is at 0,0
 
+
+
+
         # Centralising dataset around center keypoint center
-        new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.centralise_2d)
+        # new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.centralise_2d)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.centralise_3d)
 
         # Normalise Dataframe
@@ -61,7 +75,7 @@ class BugDataset(Dataset):
 
         img_name = os.path.join(self.root_dir,
                                 self.bugs_frame.iloc[idx, 0])
-        image = io.imread(img_name)
+        image = cv2.resize(io.imread(img_name), (self.transform_x_y,self.transform_x_y))
         height, width, _ = image.shape
         df_columns = self.bugs_frame.columns.values.tolist()
         sample = {'image':image}
@@ -93,7 +107,9 @@ class BugDataset(Dataset):
             sample = self.transform(sample)
 
         return sample
-    
+    def scale_data(self,sample):
+        return sample* self.scale_percent / 100
+        
     def centralise_2d(self, sample):
         x_diff, y_diff = sample[self.center-1][0], sample[self.center-1][1]
         for i in range(len(sample)):
@@ -157,7 +173,7 @@ class BugDataset(Dataset):
         x_coordinates, y_coordinates = zip(*keypoints)
         x_coordinates = [i for i in x_coordinates if i != 0]
         y_coordinates = [i for i in y_coordinates if i != 0]
-        return [round(min(x_coordinates)-padding), round(min(y_coordinates)-padding), round(max(x_coordinates)+padding), round(max(y_coordinates)+padding)]
+        return np.array([round(min(x_coordinates)-padding), round(min(y_coordinates)-padding), round(max(x_coordinates)+padding), round(max(y_coordinates)+padding)])
         
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
