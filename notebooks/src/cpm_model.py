@@ -168,4 +168,3 @@ class CPM(nn.Module):
                                          pool_center_map)
 
         return conv7_stage1_map, Mconv5_stage2_map, Mconv5_stage3_map, Mconv5_stage4_map, Mconv5_stage5_map, Mconv5_stage6_map
-

@@ -98,7 +98,7 @@ class BugDataset(Dataset):
         sample['heatmap'][:, :, 0] = 1.0 - np.max(sample['heatmap'][:, :, 1:], axis=2)
 
         sample['centermap'] = np.zeros((height, width, 1), dtype=np.float32)
-        center_map = self.guassian_kernel(size_h=height, size_w=width, center_x=sample['key_points_2D'][2,0], center_y=sample['key_points_2D'][2,1], sigma=3)
+        center_map = self.guassian_kernel(size_h=height, size_w=width, center_x=width/2, center_y=height/2, sigma=3)
         center_map[center_map > 1] = 1
         center_map[center_map < 0.0099] = 0
         sample['centermap'][:, :, 0] = center_map
@@ -183,10 +183,16 @@ class ToTensor(object):
         # numpy image: H x W x C
         # torch image: C X H X W
         image = image.transpose((2, 0, 1))
+        heatmap = sample.pop('heatmap')
+        center =  sample.pop('centermap')
+
+        heatmap = heatmap.transpose((2, 0, 1))
+        center =center.transpose((2, 0, 1))
+
         sample_keys = list(sample.keys())
         sample_data = list(sample.values())
 
-        dic ={'image': torch.from_numpy(image)}
+        dic ={'image': torch.from_numpy(image), 'heatmap':torch.from_numpy(image), 'centermap':torch.from_numpy(image)}
         dic[sample_keys[1]] = sample_data[1]
         for x in range(2,len(sample_keys)):
             dic[sample_keys[x]] = torch.FloatTensor(sample_data[x])

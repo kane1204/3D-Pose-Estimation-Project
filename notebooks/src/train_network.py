@@ -103,7 +103,9 @@ class Train_CPM_Network():
                 center = data['centermap']
                 heatmap = data['heatmap']
                 mask = data['visibility'].to(self.device)
-
+                
+            print(center.shape,heatmap.shape)
+            
             image, center, heatmap = image.to(self.device, dtype=torch.float), center.to(self.device, dtype=torch.float), heatmap.to(self.device, dtype=torch.float)
 
             heat1, heat2, heat3, heat4, heat5, heat6 =  self.model(image, center)
