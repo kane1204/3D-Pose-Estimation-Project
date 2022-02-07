@@ -36,6 +36,9 @@ class BugDataset(Dataset):
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(np.array)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(np.array)
 
+        # For memory space help we remove 
+        new_df.drop(['cam_rot', 'cam_trans', 'cam_intrinsics'], axis=1, inplace=True)
+
         # Fix BBOXS
         new_df["bounding_box"] = new_df['key_points_2D'].apply(self.bbox_fix)
 

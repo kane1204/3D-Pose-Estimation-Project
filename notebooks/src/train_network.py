@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import gc
 class Train_LiftNetwork():
     def __init__(self,model,optimiser,accurate_dist,train_dataloader,valid_dataloader,reducedkey=False):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -157,10 +158,12 @@ class Train_CPM_Network():
     #     print(f"Validation Error: \n Accuracy: {(correct / size):>4f}%, Avg loss: {test_loss:>8f} \n")
         
     def run(self, epochs):
+        torch.cuda.empty_cache()
+
         for t in range(epochs):
             print(f"Epoch {t+1}\n-------------------------------")
             self.train_step()
-            self.valid_step()
+            # self.valid_step()
         print("Done!")
         return self.model
 
