@@ -15,7 +15,7 @@ class Train_LiftNetwork():
         self.reducedKeypoints = [0,2,3,4,6 , 7,10,13 , 14,17,20, 21,24,27, 28,31,34, 35,38,41, 42,45,48, 52,53,55, 58,59,61]
 
     def train_step(self):
-        size = len(self.train_ds .dataset)
+        size = len(self.train_ds.dataset)
         self.model.train()
         for batch, data in enumerate(self.train_ds):
             if self.reduce:
@@ -90,8 +90,11 @@ class Train_CPM_Network():
         self.reducedKeypoints = [0,2,3,4,6 , 7,10,13 , 14,17,20, 21,24,27, 28,31,34, 35,38,41, 42,45,48, 52,53,55, 58,59,61]
 
     def train_step(self):
-        size = len(self.train_ds .dataset)
-        heat_weight = 46 * 46 * 15 / 1.0
+        size = len(self.train_ds.dataset)
+        ######## 
+        imageshape = 152
+        #                     8 is stride     62  keypoints 
+        heat_weight = imageshape/8 * imageshape/8 * 62 / 1.0
         self.model.train()
         for batch, data in enumerate(self.train_ds):
             if self.reduce:
@@ -105,18 +108,21 @@ class Train_CPM_Network():
                 heatmap = data['heatmap']
                 mask = data['visibility'].to(self.device)
                 
-            print(center.shape,heatmap.shape)
+            # print(center.shape,heatmap.shape)
             
-            image, center, heatmap = image.to(self.device, dtype=torch.float), center.to(self.device, dtype=torch.float), heatmap.to(self.device, dtype=torch.float)
+            input_var = image.to(self.device, dtype=torch.float)
+            heatmap_var = heatmap.to(self.device, dtype=torch.float)
+            centermap_var = center.to(self.device, dtype=torch.float)
 
-            heat1, heat2, heat3, heat4, heat5, heat6 =  self.model(image, center)
+            print(input_var.dtype, heatmap_var.dtype, centermap_var.dtype)
+            heat1, heat2, heat3, heat4, heat5, heat6 = self.model(input_var, centermap_var)
             
-            loss1 = self.loss_func(heat1, heatmap, mask) * heat_weight
-            loss2 = self.loss_func(heat2, heatmap, mask) * heat_weight
-            loss3 = self.loss_func(heat3, heatmap, mask) * heat_weight
-            loss4 = self.loss_func(heat4, heatmap, mask) * heat_weight
-            loss5 = self.loss_func(heat5, heatmap, mask) * heat_weight
-            loss6 = self.loss_func(heat6, heatmap, mask) * heat_weight
+            loss1 = self.loss_func(heat1, heatmap_var, mask) * heat_weight
+            loss2 = self.loss_func(heat2, heatmap_var, mask) * heat_weight
+            loss3 = self.loss_func(heat3, heatmap_var, mask) * heat_weight
+            loss4 = self.loss_func(heat4, heatmap_var, mask) * heat_weight
+            loss5 = self.loss_func(heat5, heatmap_var, mask) * heat_weight
+            loss6 = self.loss_func(heat6, heatmap_var, mask) * heat_weight
 
             loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
             # Backpropagation
@@ -125,7 +131,7 @@ class Train_CPM_Network():
             self.optimiser.step()
             print(batch)
             if batch % 100 == 0:
-                loss, current = loss.item(), batch * len(X)
+                loss, current = loss.item(), batch * len(size)
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
     # def valid_step(self):

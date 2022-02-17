@@ -25,7 +25,7 @@ class BugDataset(Dataset):
         self.means_3d = []
         self.std_2d =  []
         self.std_3d = []
-        self.stride = 8
+        self.stride = 2
         self.sigma = 3.0
         # Remove all the datapoints that doesnt have center keypoint visible. 
         new_df = pd.DataFrame()
@@ -43,18 +43,48 @@ class BugDataset(Dataset):
         new_df["bounding_box"] = new_df['key_points_2D'].apply(self.bbox_fix)
 
         # Created some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
-        self.transform_x_y = 368
+        self.transform_x_y = 152
         self.scale_percent = (self.transform_x_y/self.xy)*100
 
         #  Image resizing occurs later on in the get item stage
 
         # Second Correct the 2D keypoint
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
-        new_df["bounding_box"] =  new_df["bounding_box"].apply(self.scale_data)
+        new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
 
         # TODO: Create code that centralises the image around keypoint 3 so the middle of the image is at 0,0
+        
+        # Create Heatmap guassian for each keypoint
+        new_df['heatmap'] = None
+        new_df['centermap'] = None
+        for z in range(len(new_df['heatmap'])):
 
+            # Create Heatmap guassian for each keypoint
+            keypoints = new_df['key_points_2D'][z]
+            heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(keypoints) + 1), dtype=np.float32)
+            for i in range(len(keypoints)):
+                x = int(keypoints[i][0]) * 1.0 / self.stride
+                y = int(keypoints[i][1]) * 1.0 / self.stride
+                heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
+                heat_map[heat_map > 1] = 1
+                heat_map[heat_map < 0.0099] = 0
+                heat[:, :, i + 1] = heat_map
 
+            heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
+            new_df['heatmap'][z] = heat
+
+            # Center Map Calculation
+            center_x = (keypoints[:,0][keypoints[:,0] < self.transform_x_y].max() +
+                        keypoints[:,0][keypoints[:,0] > 0].min()) / 2
+            center_y = (keypoints[:,1][keypoints[:,1] < self.transform_x_y].max() +
+                        keypoints[:,1][keypoints[:,1] > 0].min()) / 2
+
+            
+            new_df['centermap'][z] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
+            center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
+            center_map[center_map > 1] = 1
+            center_map[center_map < 0.0099] = 0
+            new_df['centermap'][z][:, :, 0] = center_map
 
 
         # Centralising dataset around center keypoint center
@@ -85,26 +115,6 @@ class BugDataset(Dataset):
  
         for x in range(len(df_columns)):    
             sample[df_columns[x]] = self.bugs_frame.iloc[idx,x]
-
-        # Create Heatmap guassian for each keypoint
-        # print(sample['key_points_2D'])
-        # print(sample['key_points_2D'][2,0], sample['key_points_2D'][2,0])
-        sample['heatmap'] = np.zeros((round(height/self.stride), round(width/self.stride), len(sample['key_points_2D']) + 1), dtype=np.float32)
-        for i in range(len(sample['key_points_2D'])):
-            x = int(sample['key_points_2D'][i][0]) * 1.0 / self.stride
-            y = int(sample['key_points_2D'][i][1]) * 1.0 / self.stride
-            heat_map = self.guassian_kernel(size_h=height / self.stride, size_w=width / self.stride, center_x=x, center_y=y, sigma=self.sigma)
-            heat_map[heat_map > 1] = 1
-            heat_map[heat_map < 0.0099] = 0
-            sample['heatmap'][:, :, i + 1] = heat_map
-
-        sample['heatmap'][:, :, 0] = 1.0 - np.max(sample['heatmap'][:, :, 1:], axis=2)
-
-        sample['centermap'] = np.zeros((height, width, 1), dtype=np.float32)
-        center_map = self.guassian_kernel(size_h=height, size_w=width, center_x=width/2, center_y=height/2, sigma=3)
-        center_map[center_map > 1] = 1
-        center_map[center_map < 0.0099] = 0
-        sample['centermap'][:, :, 0] = center_map
 
         if self.transform:
             sample = self.transform(sample)
@@ -165,7 +175,7 @@ class BugDataset(Dataset):
         df['key_points_2D'] = df['key_points_2D'].apply(self.normal_2d)
         df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
         return df
-
+        
     def guassian_kernel(self, size_w, size_h, center_x, center_y, sigma):
         gridy, gridx = np.mgrid[0:size_h, 0:size_w]
         D2 = (gridx - center_x) ** 2 + (gridy - center_y) ** 2
@@ -190,12 +200,14 @@ class ToTensor(object):
         center =  sample.pop('centermap')
 
         heatmap = heatmap.transpose((2, 0, 1))
-        center =center.transpose((2, 0, 1))
+
+        center = center.transpose((2, 0, 1))
 
         sample_keys = list(sample.keys())
         sample_data = list(sample.values())
+        image = torch.from_numpy(image)
 
-        dic ={'image': torch.from_numpy(image), 'heatmap':torch.from_numpy(image), 'centermap':torch.from_numpy(image)}
+        dic ={'image': image, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center)}
         dic[sample_keys[1]] = sample_data[1]
         for x in range(2,len(sample_keys)):
             dic[sample_keys[x]] = torch.FloatTensor(sample_data[x])

@@ -88,6 +88,7 @@ class CPM(nn.Module):
     def _stage2(self, pool3_stage2_map, conv7_stage1_map, pool_center_map):
 
         x = F.relu(self.conv4_stage2(pool3_stage2_map))
+        print(x.shape, conv7_stage1_map.shape, pool_center_map.shape)
         x = torch.cat([x, conv7_stage1_map, pool_center_map], dim=1)
         x = F.relu(self.Mconv1_stage2(x))
         x = F.relu(self.Mconv2_stage2(x))
