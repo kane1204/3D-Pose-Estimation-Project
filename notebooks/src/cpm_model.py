@@ -7,13 +7,15 @@ class CPM(nn.Module):
     def __init__(self, k):
         super(CPM, self).__init__()
         self.k = k
-        self.pool_center = nn.AvgPool2d(kernel_size=9, stride=8, padding=1)
+        self.stride = 2
+        self.pool_center = nn.AvgPool2d(kernel_size=9, stride=self.stride, padding=4)
+            ### change stride
         self.conv1_stage1 = nn.Conv2d(3, 128, kernel_size=9, padding=4)
         self.pool1_stage1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.conv2_stage1 = nn.Conv2d(128, 128, kernel_size=9, padding=4)
-        self.pool2_stage1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool2_stage1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.conv3_stage1 = nn.Conv2d(128, 128, kernel_size=9, padding=4)
-        self.pool3_stage1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool3_stage1 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.conv4_stage1 = nn.Conv2d(128, 32, kernel_size=5, padding=2)
         self.conv5_stage1 = nn.Conv2d(32, 512, kernel_size=9, padding=4)
         self.conv6_stage1 = nn.Conv2d(512, 512, kernel_size=1)
@@ -22,9 +24,9 @@ class CPM(nn.Module):
         self.conv1_stage2 = nn.Conv2d(3, 128, kernel_size=9, padding=4)
         self.pool1_stage2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.conv2_stage2 = nn.Conv2d(128, 128, kernel_size=9, padding=4)
-        self.pool2_stage2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool2_stage2 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.conv3_stage2 = nn.Conv2d(128, 128, kernel_size=9, padding=4)
-        self.pool3_stage2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool3_stage2 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.conv4_stage2 = nn.Conv2d(128, 32, kernel_size=5, padding=2)
 
         self.Mconv1_stage2 = nn.Conv2d(32 + self.k + 2, 128, kernel_size=11, padding=5)
@@ -88,7 +90,6 @@ class CPM(nn.Module):
     def _stage2(self, pool3_stage2_map, conv7_stage1_map, pool_center_map):
 
         x = F.relu(self.conv4_stage2(pool3_stage2_map))
-        print(x.shape, conv7_stage1_map.shape, pool_center_map.shape)
         x = torch.cat([x, conv7_stage1_map, pool_center_map], dim=1)
         x = F.relu(self.Mconv1_stage2(x))
         x = F.relu(self.Mconv2_stage2(x))
@@ -149,8 +150,6 @@ class CPM(nn.Module):
 
 
     def forward(self, image, center_map):
-
-
         pool_center_map = self.pool_center(center_map)
 
         conv7_stage1_map = self._stage1(image)
