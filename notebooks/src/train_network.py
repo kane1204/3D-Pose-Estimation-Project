@@ -94,7 +94,7 @@ class Train_CPM_Network():
         size = len(self.train_ds.dataset)
         ########
         #                     8 is stride     62  keypoints 
-        heat_weight =  0
+        heat_weight =  1.0
         self.model.train()
         for batch, data in enumerate(self.train_ds):
             if self.reduce:
