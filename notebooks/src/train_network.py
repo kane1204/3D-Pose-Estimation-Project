@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from tqdm.notebook import tqdm
 import torch.nn as nn
 import gc
 class Train_LiftNetwork():
@@ -89,14 +90,16 @@ class Train_CPM_Network():
         self.valid_ds = valid_dataloader
         self.reduce = reducedkey
         self.reducedKeypoints = [0, 1,3,4,5,7 , 8,11,14, 15,18,21, 22,25,28, 29,32,35, 36,39,42, 43,46,49, 53,54,56, 59,60,62]
-        self.criterion = nn.MSELoss(reduction='mean').cuda()
+        self.criterion = nn.MSELoss().cuda()
     def train_step(self):
         size = len(self.train_ds.dataset)
+        correct = 0
+        losses = 0
         ########
         #                     8 is stride     62  keypoints 
         heat_weight =  1.0
         self.model.train()
-        for batch, data in enumerate(self.train_ds):
+        for data in tqdm(self.train_ds):
             if self.reduce:
                 image = data['image'][:,self.reducedKeypoints]
                 center = data['centermap'][:,self.reducedKeypoints]
@@ -124,13 +127,25 @@ class Train_CPM_Network():
             # print(loss1.shape, loss2.shape, loss3.shape,  loss4.shape, loss5.shape, loss6.shape)
             loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
             
+
+            pred = torch.from_numpy(self.get_kpts(heat6)).to(self.device, dtype=torch.float)
+            y = torch.from_numpy(self.get_kpts(heatmap)).to(self.device, dtype=torch.float)
+            
+            if self.reduce:
+                correct += (abs(pred - y)<self.accz_dists[self.reducedKeypoints].to(self.device)).type(torch.float).sum().item()
+            else:
+                correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
+
             # Backpropagation
             self.optimiser.zero_grad()
             loss.backward()
             self.optimiser.step()
-            if batch % 100 == 0:
-                loss, current = loss.item(), batch * len(heat1)
-                print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+            losses += loss.item()
+
+        train_acc = (correct / size)*100
+        train_loss = losses/size
+        return train_acc, train_loss
 
     def valid_step(self):
         size = len(self.valid_ds.dataset)
@@ -139,7 +154,7 @@ class Train_CPM_Network():
         heat_weight =  1.0
         test_loss, correct = 0, 0
         with torch.no_grad():
-            for data in self.valid_ds:
+            for data in tqdm(self.valid_ds):
                 if self.reduce:
                     image = data['image'][:,self.reducedKeypoints]
                     center = data['centermap'][:,self.reducedKeypoints]
@@ -177,15 +192,19 @@ class Train_CPM_Network():
                     correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
 
         test_loss /= num_batches
-        print(f"Validation Error: \n Accuracy: {(correct / size)*100:>4f}%, Avg loss: {test_loss:>8f} \n")
+        val_acc = (correct / size)*100
+        val_loss = test_loss
+        # print(f"Validation Error: \n Accuracy: {val_acc:>4f}%, Avg loss: {val_loss:>8f} \n")
+        return val_acc, val_loss
+        
         
     def run(self, epochs):
         torch.cuda.empty_cache()
 
-        for t in range(epochs):
-            print(f"Epoch {t+1}\n-------------------------------")
-            self.train_step()
-            self.valid_step()
+        for t in tqdm(range(1, epochs+1)):
+            train_acc, train_loss = self.train_step()
+            val_acc, val_loss = self.valid_step()
+            print(f'Epoch {t+0:03}: | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} | Train Acc: {train_acc:.3f}| Val Acc: {val_acc:.3f}')
         print("Done!")
         return self.model
     
