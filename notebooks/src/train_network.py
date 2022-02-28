@@ -94,19 +94,19 @@ class Train_CPM_Network():
         size = len(self.train_ds.dataset)
         ########
         #                     8 is stride     62  keypoints 
-        heat_weight =  0
+        heat_weight =  1.0
         self.model.train()
         for batch, data in enumerate(self.train_ds):
             if self.reduce:
                 image = data['image'][:,self.reducedKeypoints]
                 center = data['centermap'][:,self.reducedKeypoints]
                 heatmap = data['heatmap'][:,self.reducedKeypoints]
-                heat_weight = (len(self.reducedKeypoints)**2)*8
+                # heat_weight = (len(self.reducedKeypoints)**2)*8
             else:
                 image = data['image']
                 center = data['centermap']
                 heatmap = data['heatmap']
-                heat_weight = (62**2)*8
+                # heat_weight = (62**2)*8
             
             input_var = image.to(self.device, dtype=torch.float)
             heatmap_var = heatmap.to(self.device, dtype=torch.float)
@@ -144,10 +144,12 @@ class Train_CPM_Network():
                     image = data['image'][:,self.reducedKeypoints]
                     center = data['centermap'][:,self.reducedKeypoints]
                     heatmap = data['heatmap'][:,self.reducedKeypoints]
+                    # (len(self.reducedKeypoints)**2)*8
                 else:
                     image = data['image']
                     center = data['centermap']
                     heatmap = data['heatmap']
+                    # heat_weight = (62**2)*8
 
                 input_var = image.to(self.device, dtype=torch.float)
                 heatmap_var = heatmap.to(self.device, dtype=torch.float)
