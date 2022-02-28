@@ -46,13 +46,11 @@ class BugDataset(Dataset):
         self.transform_x_y = 152
         self.scale_percent = (self.transform_x_y/self.xy)*100
 
-        #  Image resizing occurs later on in the get item stage
+        # Image resizing occurs later on in the get item stage
 
         # Second Correct the 2D keypoint
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
         new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
-
-        # TODO: Create code that centralises the image around keypoint 3 so the middle of the image is at 0,0
         
         # Create Heatmap guassian for each keypoint
         new_df['heatmap'] = None

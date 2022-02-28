@@ -88,25 +88,25 @@ class Train_CPM_Network():
         self.train_ds = train_dataloader
         self.valid_ds = valid_dataloader
         self.reduce = reducedkey
-        self.reducedKeypoints = [0,2,3,4,6 , 7,10,13 , 14,17,20, 21,24,27, 28,31,34, 35,38,41, 42,45,48, 52,53,55, 58,59,61]
-        self.criterion = nn.MSELoss().cuda()
+        self.reducedKeypoints = [0, 1,3,4,5,7 , 8,11,14, 15,18,21, 22,25,28, 29,32,35, 36,39,42, 43,46,49, 53,54,56, 59,60,62]
+        self.criterion = nn.MSELoss(reduction='mean').cuda()
     def train_step(self):
         size = len(self.train_ds.dataset)
-        ######## 
-        
+        ########
         #                     8 is stride     62  keypoints 
-        heat_weight = self.imageshape/4 * self.imageshape/4 * 62 / 1.0
+        heat_weight =  0
         self.model.train()
         for batch, data in enumerate(self.train_ds):
             if self.reduce:
                 image = data['image'][:,self.reducedKeypoints]
                 center = data['centermap'][:,self.reducedKeypoints]
                 heatmap = data['heatmap'][:,self.reducedKeypoints]
+                heat_weight = (len(self.reducedKeypoints)**2)*8
             else:
                 image = data['image']
                 center = data['centermap']
                 heatmap = data['heatmap']
-                
+                heat_weight = (62**2)*8
             
             input_var = image.to(self.device, dtype=torch.float)
             heatmap_var = heatmap.to(self.device, dtype=torch.float)
@@ -121,20 +121,22 @@ class Train_CPM_Network():
             loss5 = self.criterion(heat5, heatmap_var) * heat_weight
             loss6 = self.criterion(heat6, heatmap_var) * heat_weight
 
+            # print(loss1.shape, loss2.shape, loss3.shape,  loss4.shape, loss5.shape, loss6.shape)
             loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
+            
             # Backpropagation
             self.optimiser.zero_grad()
             loss.backward()
             self.optimiser.step()
             if batch % 100 == 0:
-                loss, current = loss.item(), batch * size
+                loss, current = loss.item(), batch * len(heat1)
                 print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
     def valid_step(self):
         size = len(self.valid_ds.dataset)
         num_batches = len(self.valid_ds)
         self.model.eval()
-        heat_weight = self.imageshape/4 * self.imageshape/4 * 62 / 1.0
+        heat_weight =  1.0
         test_loss, correct = 0, 0
         with torch.no_grad():
             for data in self.valid_ds:
@@ -173,7 +175,7 @@ class Train_CPM_Network():
                     correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
 
         test_loss /= num_batches
-        print(f"Validation Error: \n Accuracy: {(correct / size):>4f}%, Avg loss: {test_loss:>8f} \n")
+        print(f"Validation Error: \n Accuracy: {(correct / size)*100:>4f}%, Avg loss: {test_loss:>8f} \n")
         
     def run(self, epochs):
         torch.cuda.empty_cache()
