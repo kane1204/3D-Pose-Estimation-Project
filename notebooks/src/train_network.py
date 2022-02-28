@@ -99,7 +99,7 @@ class Train_CPM_Network():
         #                     8 is stride     62  keypoints 
         heat_weight =  1.0
         self.model.train()
-        for data in tqdm(self.train_ds):
+        for data in tqdm(self.train_ds, desc="Training Step"):
             if self.reduce:
                 image = data['image'][:,self.reducedKeypoints]
                 center = data['centermap'][:,self.reducedKeypoints]
@@ -154,7 +154,7 @@ class Train_CPM_Network():
         heat_weight =  1.0
         test_loss, correct = 0, 0
         with torch.no_grad():
-            for data in tqdm(self.valid_ds):
+            for data in tqdm(self.valid_ds, desc="Validation Step"):
                 if self.reduce:
                     image = data['image'][:,self.reducedKeypoints]
                     center = data['centermap'][:,self.reducedKeypoints]
@@ -201,7 +201,7 @@ class Train_CPM_Network():
     def run(self, epochs):
         torch.cuda.empty_cache()
 
-        for t in tqdm(range(1, epochs+1)):
+        for t in tqdm(range(1, epochs+1), desc="CPM Model Training"):
             train_acc, train_loss = self.train_step()
             val_acc, val_loss = self.valid_step()
             print(f'Epoch {t+0:03}: | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} | Train Acc: {train_acc:.3f}| Val Acc: {val_acc:.3f}')
