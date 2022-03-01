@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 class BugDataset(Dataset):
     """Bug dataset."""
 
-    def __init__(self, df, root_dir, transform=None):
+    def __init__(self, df, root_dir, reduced=False,  transform=None):
         """
         Args:
             hdf_file (string): Path to the hdf file with annotations.
@@ -27,6 +27,8 @@ class BugDataset(Dataset):
         self.std_3d = []
         self.stride = 2
         self.sigma = 3.0
+        #                   Body    r_1      r_2        r_3       l_1       l_2        l_3       a_r        a_l
+        self.reduced_kp = [0,2,3,6, 7,10,13, 14,17,20 , 21,24,27, 28,31,34, 35,38,41, 42,45,48,  52,54,55, 58,60,61]
         # Remove all the datapoints that doesnt have center keypoint visible. 
         new_df = pd.DataFrame()
         for col, x in df.iterrows():
@@ -35,7 +37,7 @@ class BugDataset(Dataset):
                 new_df.reset_index(drop=True, inplace=True)
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(np.array)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(np.array)
-
+        new_df['visibility'] = new_df['visibility'].apply(np.array)
         # For memory space help we remove 
         new_df.drop(['cam_rot', 'cam_trans', 'cam_intrinsics'], axis=1, inplace=True)
 
@@ -46,7 +48,11 @@ class BugDataset(Dataset):
         self.transform_x_y = 152
         self.scale_percent = (self.transform_x_y/self.xy)*100
 
-        # Image resizing occurs later on in the get item stage
+        # Keypoint reduction code
+        if reduced:
+            new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.reduce)
+            new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.reduce)
+            new_df['visibility'] = new_df['visibility'].apply(self.reduce)
 
         # Second Correct the 2D keypoint
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
@@ -61,12 +67,13 @@ class BugDataset(Dataset):
             keypoints = new_df['key_points_2D'][z]
             heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(keypoints) + 1), dtype=np.float32)
             for i in range(len(keypoints)):
-                x = int(keypoints[i][0]) * 1.0 / self.stride
-                y = int(keypoints[i][1]) * 1.0 / self.stride
-                heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
-                heat_map[heat_map > 1] = 1
-                heat_map[heat_map < 0.0099] = 0
-                heat[:, :, i + 1] = heat_map
+                if new_df['visibility'][z][i] == 1:
+                    x = int(keypoints[i][0]) * 1.0 / self.stride
+                    y = int(keypoints[i][1]) * 1.0 / self.stride
+                    heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
+                    heat_map[heat_map > 1] = 1
+                    heat_map[heat_map < 0.0099] = 0
+                    heat[:, :, i + 1] = heat_map
 
             heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
             new_df['heatmap'][z] = heat
@@ -142,6 +149,10 @@ class BugDataset(Dataset):
         return np.nan_to_num((x-self.means_3d)/self.std_3d)
 
     def normalise(self, df):
+        if self.reduce:
+            kp = 28
+        else:
+            kp = 62
         array_2d = np.array(df['key_points_2D'].to_numpy())
         array_3d = np.array(df['key_points_3D'].to_numpy())
 
@@ -149,26 +160,26 @@ class BugDataset(Dataset):
             array_2d[x] = np.array(array_2d[x])
             array_3d[x] = np.array(array_3d[x])
 
-        fixed_array_2d = np.empty((len(array_2d),124))
-        fixed_array_3d = np.empty((len(array_3d),186))
+        fixed_array_2d = np.empty((len(array_2d),kp*2))
+        fixed_array_3d = np.empty((len(array_3d),kp*3))
         for x in range(len(fixed_array_2d)):
-            z = array_2d[x].reshape(1,124)
+            z = array_2d[x].reshape(1,kp*2)
             fixed_array_2d[x] = z
         for x in range(len(fixed_array_3d)):
-            z = array_3d[x].reshape(1,186)
+            z = array_3d[x].reshape(1,kp*3)
             fixed_array_3d[x] = z
 
         for x in range(len(fixed_array_2d[0])):
             self.std_2d.append(np.std(fixed_array_2d[:,x], axis=0))
             self.means_2d.append(np.mean(fixed_array_2d[:,x], axis=0))
-        self.means_2d = np.array(self.means_2d).reshape((62,2))
-        self.std_2d = np.array(self.std_2d).reshape((62,2))
+        self.means_2d = np.array(self.means_2d).reshape((kp,2))
+        self.std_2d = np.array(self.std_2d).reshape((kp,2))
 
         for x in range(len(fixed_array_3d[0])):
             self.std_3d.append(np.std(fixed_array_3d[:,x], axis=0))
             self.means_3d.append(np.mean(fixed_array_3d[:,x], axis=0))
-        self.means_3d = np.array(self.means_3d).reshape((62,3))
-        self.std_3d = np.array(self.std_3d).reshape((62,3))
+        self.means_3d = np.array(self.means_3d).reshape((kp,3))
+        self.std_3d = np.array(self.std_3d).reshape((kp,3))
 
         df['key_points_2D'] = df['key_points_2D'].apply(self.normal_2d)
         df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
@@ -185,7 +196,10 @@ class BugDataset(Dataset):
         x_coordinates = [i for i in x_coordinates if i != 0]
         y_coordinates = [i for i in y_coordinates if i != 0]
         return np.array([round(min(x_coordinates)-padding), round(min(y_coordinates)-padding), round(max(x_coordinates)+padding), round(max(y_coordinates)+padding)])
-        
+    
+    def reduce(self, sample):
+        return sample[self.reduced_kp]
+
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample):
