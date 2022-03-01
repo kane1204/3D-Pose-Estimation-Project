@@ -201,10 +201,11 @@ class Train_CPM_Network():
     def run(self, epochs):
         torch.cuda.empty_cache()
 
-        for t in tqdm(range(1, epochs+1), desc="CPM Model Training"):
+        for t in tqdm(range(1, epochs+1), desc="CPM Model Epochs"):
+            print(f'Epoch {t+0:03}:')
             train_acc, train_loss = self.train_step()
             val_acc, val_loss = self.valid_step()
-            print(f'Epoch {t+0:03}: | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} | Train Acc: {train_acc:.3f}| Val Acc: {val_acc:.3f}')
+            print(f'Finished Epoch {t+0:03}: | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} | Train Acc: {train_acc:.3f}| Val Acc: {val_acc:.3f}')
         print("Done!")
         return self.model
     
