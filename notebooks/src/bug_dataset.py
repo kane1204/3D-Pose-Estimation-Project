@@ -47,22 +47,23 @@ class BugDataset(Dataset):
         # Fix BBOXS
         new_df["bounding_box"] = new_df['key_points_2D'].apply(self.bbox_fix)
 
-        # Created some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
-        self.transform_x_y = 152
-        self.scale_percent = (self.transform_x_y/self.xy)*100
-
         # Keypoint reduction code
         if self.reduced:
             new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.reduce)
             new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.reduce)
-            new_df['visibility'] = new_df['visibility'].apply(self.reduce)
+            new_df['visibility'] = new_df['visibility'].apply(self.reduce)          
 
+        # Created some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
+
+        # TODO: Crop code?
+
+        self.transform_x_y = 152
+        self.scale_percent = (self.transform_x_y/self.xy)*100
         # Second Correct the 2D keypoint
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
         new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
 
         # Centralising dataset around center keypoint center
-        # new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.centralise_2d)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.centralise_3d)
 
         # Calculate normals
@@ -125,8 +126,8 @@ class BugDataset(Dataset):
         sample['centermap'][:, :, 0] = center_map
 
         # Standardises 2d & 3d Keypoints
-        sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
-        # sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
+        # sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
+        sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
 
         if self.transform:
             sample = self.transform(sample)
