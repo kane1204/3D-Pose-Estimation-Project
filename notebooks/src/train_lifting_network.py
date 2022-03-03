@@ -32,12 +32,12 @@ class Train_LiftNetwork():
             X_var = torch.autograd.Variable(X)
             y_var = torch.autograd.Variable(y)
             # y_var = torch.flatten(y_var, start_dim=1, end_dim=2)
-            # print(X_var)
+
             pred = self.model(torch.flatten(X_var, start_dim=1, end_dim=2))
 
             # For 3 Dims 
             # mask = torch.flatten(torch.stack([mask,mask,mask],dim=1),start_dim=1, end_dim= 2)
-            # print(mask.shape)
+
             loss = torch.mean(((pred - y_var)*mask)**2)
             # correct += (abs(pred - y_var)<torch.flatten(self.accz_dists.to(self.device).T)).type(torch.float).sum().item()
 
@@ -68,7 +68,7 @@ class Train_LiftNetwork():
                 X_var = torch.autograd.Variable(X)
                 y_var = torch.autograd.Variable(y)
                 # y_var = torch.flatten(y_var, start_dim=1, end_dim=2)
-                # print(X_var)
+
                 pred = self.model(torch.flatten(X_var, start_dim=1, end_dim=2))
                 
                 # For 3 Dims 
