@@ -60,47 +60,13 @@ class BugDataset(Dataset):
         # Second Correct the 2D keypoint
         new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
         new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
-        
-        # Create Heatmap guassian for each keypoint
-        new_df['heatmap'] = None
-        new_df['centermap'] = None
-        for z in range(len(new_df['heatmap'])):
-
-            # Create Heatmap guassian for each keypoint
-            keypoints = new_df['key_points_2D'][z]
-            heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(keypoints) + 1), dtype=np.float32)
-            for i in range(len(keypoints)):
-                if new_df['visibility'][z][i] == 1:
-                    x = int(keypoints[i][0]) * 1.0 / self.stride
-                    y = int(keypoints[i][1]) * 1.0 / self.stride
-                    heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
-                    heat_map[heat_map > 1] = 1
-                    heat_map[heat_map < 0.0099] = 0
-                    heat[:, :, i + 1] = heat_map
-
-            heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
-            new_df['heatmap'][z] = heat
-
-            # Center Map Calculation
-            center_x = (keypoints[:,0][keypoints[:,0] < self.transform_x_y].max() +
-                        keypoints[:,0][keypoints[:,0] > 0].min()) / 2
-            center_y = (keypoints[:,1][keypoints[:,1] < self.transform_x_y].max() +
-                        keypoints[:,1][keypoints[:,1] > 0].min()) / 2
-
-            
-            new_df['centermap'][z] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
-            center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
-            center_map[center_map > 1] = 1
-            center_map[center_map < 0.0099] = 0
-            new_df['centermap'][z][:, :, 0] = center_map
-
 
         # Centralising dataset around center keypoint center
         # new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.centralise_2d)
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.centralise_3d)
 
-        # Normalise Dataframe
-        new_df = self.normalise(new_df)
+        # Calculate normals
+        self.normalise(new_df)
 
         # Original DF being used
         self.bugs_frame = new_df
@@ -116,13 +82,51 @@ class BugDataset(Dataset):
 
         img_name = os.path.join(self.root_dir,
                                 self.bugs_frame.iloc[idx, 0])
+        # Scales Image by a factor given
         image = cv2.resize(io.imread(img_name), (self.transform_x_y,self.transform_x_y))
-        height, width, _ = image.shape
+
         df_columns = self.bugs_frame.columns.values.tolist()
         sample = {'image':image}
- 
+        # Add the rest of the attributes
         for x in range(len(df_columns)):    
             sample[df_columns[x]] = self.bugs_frame.iloc[idx,x]
+
+
+        # Create HEAT & CENTER MAPS
+        sample['heatmap'] = None
+        sample['centermap'] = None
+        # Create Heatmap guassian for idx
+        heat_map = 0
+        keypoints = sample['key_points_2D']
+        heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(keypoints) + 1), dtype=np.float32)
+        for i in range(len(keypoints)):
+            if sample['visibility'][i] == 1:
+                x = int(keypoints[i][0]) * 1.0 / self.stride
+                y = int(keypoints[i][1]) * 1.0 / self.stride
+                heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
+                heat_map[heat_map > 1] = 1
+                heat_map[heat_map < 0.0099] = 0
+                heat[:, :, i + 1] = heat_map
+
+        heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
+        sample['heatmap'] = heat
+
+        # Center Map Calculation
+        center_x = (keypoints[:,0][keypoints[:,0] < self.transform_x_y].max() +
+                    keypoints[:,0][keypoints[:,0] > 0].min()) / 2
+        center_y = (keypoints[:,1][keypoints[:,1] < self.transform_x_y].max() +
+                    keypoints[:,1][keypoints[:,1] > 0].min()) / 2
+
+        
+        sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
+        center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
+        center_map[center_map > 1] = 1
+        center_map[center_map < 0.0099] = 0
+        sample['centermap'][:, :, 0] = center_map
+
+        # Standardises 2d & 3d Keypoints
+        sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
+        # sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
 
         if self.transform:
             sample = self.transform(sample)
@@ -147,8 +151,10 @@ class BugDataset(Dataset):
         return sample
 
     def normal_2d(self, x):
+        np.seterr(invalid='ignore')
         return np.nan_to_num((x-self.means_2d)/self.std_2d)
     def normal_3d(self, x):
+        np.seterr(invalid='ignore')
         return np.nan_to_num((x-self.means_3d)/self.std_3d)
 
     def normalise(self, df):
@@ -184,9 +190,9 @@ class BugDataset(Dataset):
         self.means_3d = np.array(self.means_3d).reshape((kp,3))
         self.std_3d = np.array(self.std_3d).reshape((kp,3))
 
-        df['key_points_2D'] = df['key_points_2D'].apply(self.normal_2d)
-        df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
-        return df
+        # df['key_points_2D'] = df['key_points_2D'].apply(self.normal_2d)
+        # df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
+        # return df
         
     def guassian_kernel(self, size_w, size_h, center_x, center_y, sigma):
         gridy, gridx = np.mgrid[0:size_h, 0:size_w]

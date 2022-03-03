@@ -13,7 +13,9 @@ class Train_CPM_Network():
         self.accz_dists = accurate_dist
         self.train_ds = train_dataloader
         self.valid_ds = valid_dataloader
-        self.criterion = JointsMSELoss(self.device, use_target_weight=False)
+        self.criterion = self.loss_func
+        # self.criterion = JointsMSELoss(self.device, use_target_weight=False)
+
     def train_step(self):
         size = len(self.train_ds.dataset)
         correct = 0
@@ -57,6 +59,7 @@ class Train_CPM_Network():
             self.optimiser.step()
 
             losses += loss.item()
+            break
 
         train_acc = (correct / size)*100
         train_loss = losses/size
@@ -110,8 +113,9 @@ class Train_CPM_Network():
 
         for t in tqdm(range(1, epochs+1), desc="CPM Model Epochs"):
             print(f'Epoch {t+0:03}:')
+            train_acc, train_loss, val_acc, val_loss  = 0,0,0,0
             train_acc, train_loss = self.train_step()
-            val_acc, val_loss = self.valid_step()
+            # val_acc, val_loss = self.valid_step()
             print(f'Finished Epoch {t+0:03}: | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f} | Train Acc: {train_acc:.3f}| Val Acc: {val_acc:.3f}')
         print("Done!")
         return self.model
@@ -142,48 +146,48 @@ class Train_CPM_Network():
         masked = (pred - expect)*new_mask
         return torch.mean(masked**2)
 
-class JointsMSELoss(nn.Module):
-    """MSE loss for heatmaps.
-    Args:
-        use_target_weight (bool): Option to use weighted MSE loss.
-            Different joint types may have different target weights.
-        loss_weight (float): Weight of the loss. Default: 1.0.
-    """
+# class JointsMSELoss(nn.Module):
+#     """MSE loss for heatmaps.
+#     Args:
+#         use_target_weight (bool): Option to use weighted MSE loss.
+#             Different joint types may have different target weights.
+#         loss_weight (float): Weight of the loss. Default: 1.0.
+#     """
 
-    def __init__(self,device, use_target_weight=False, loss_weight=1.):
-        super().__init__()
-        self.device = device
-        self.criterion = nn.MSELoss()
-        self.use_target_weight = use_target_weight
-        self.loss_weight = loss_weight
+#     def __init__(self,device, use_target_weight=False, loss_weight=1.):
+#         super().__init__()
+#         self.device = device
+#         self.criterion = nn.MSELoss()
+#         self.use_target_weight = use_target_weight
+#         self.loss_weight = loss_weight
 
-    def forward(self, output, target, target_weight):
-        """Forward function."""
-        batch_size = output.size(0)
-        num_joints = output.size(1)
+#     def forward(self, output, target, target_weight):
+#         """Forward function."""
+#         batch_size = output.size(0)
+#         num_joints = output.size(1)
         
-        # target_weight =  torch.cat((torch.from_numpy(np.array([[1]]*len(target_weight))), target_weight), dim= 1).to(self.device)
-        # new_mask = torch.zeros(output.shape,device=self.device)
-        # for m in range(len(target_weight)):
-        #     for i in range(len(target_weight[m])):
-        #         if target_weight[m][i] == 1:
-        #             new_mask[m][i] = torch.ones((output.shape[2],output.shape[3]))
-        #         elif target_weight[m][i] == 0:
-        #             new_mask[m][i] =  torch.zeros((output.shape[2],output.shape[3]))
-        # target_weight = new_mask
-        heatmaps_pred = output.reshape(
-            (batch_size, num_joints, -1)).split(1, 1)
-        heatmaps_gt = target.reshape((batch_size, num_joints, -1)).split(1, 1)
+#         # target_weight =  torch.cat((torch.from_numpy(np.array([[1]]*len(target_weight))), target_weight), dim= 1).to(self.device)
+#         # new_mask = torch.zeros(output.shape,device=self.device)
+#         # for m in range(len(target_weight)):
+#         #     for i in range(len(target_weight[m])):
+#         #         if target_weight[m][i] == 1:
+#         #             new_mask[m][i] = torch.ones((output.shape[2],output.shape[3]))
+#         #         elif target_weight[m][i] == 0:
+#         #             new_mask[m][i] =  torch.zeros((output.shape[2],output.shape[3]))
+#         # target_weight = new_mask
+#         heatmaps_pred = output.reshape(
+#             (batch_size, num_joints, -1)).split(1, 1)
+#         heatmaps_gt = target.reshape((batch_size, num_joints, -1)).split(1, 1)
 
-        loss = 0.
+#         loss = 0.
 
-        for idx in range(num_joints):
-            heatmap_pred = heatmaps_pred[idx].squeeze(1)
-            heatmap_gt = heatmaps_gt[idx].squeeze(1)
-            if self.use_target_weight:
-                loss += self.criterion(heatmap_pred * target_weight[: idx],
-                                       heatmap_gt * target_weight[:, idx])
-            else:
-                loss += self.criterion(heatmap_pred, heatmap_gt)
+#         for idx in range(num_joints):
+#             heatmap_pred = heatmaps_pred[idx].squeeze(1)
+#             heatmap_gt = heatmaps_gt[idx].squeeze(1)
+#             if self.use_target_weight:
+#                 loss += self.criterion(heatmap_pred * target_weight[: idx],
+#                                        heatmap_gt * target_weight[:, idx])
+#             else:
+#                 loss += self.criterion(heatmap_pred, heatmap_gt)
 
-        return loss / num_joints * self.loss_weight
+#         return loss / num_joints * self.loss_weight
