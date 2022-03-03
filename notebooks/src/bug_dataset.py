@@ -28,7 +28,10 @@ class BugDataset(Dataset):
         self.stride = 2
         self.sigma = 3.0
         #                   Body    r_1      r_2        r_3       l_1       l_2        l_3       a_r        a_l
+        self.reduced = reduced
         self.reduced_kp = [0,2,3,6, 7,10,13, 14,17,20 , 21,24,27, 28,31,34, 35,38,41, 42,45,48,  52,54,55, 58,60,61]
+        
+
         # Remove all the datapoints that doesnt have center keypoint visible. 
         new_df = pd.DataFrame()
         for col, x in df.iterrows():
@@ -49,7 +52,7 @@ class BugDataset(Dataset):
         self.scale_percent = (self.transform_x_y/self.xy)*100
 
         # Keypoint reduction code
-        if reduced:
+        if self.reduced:
             new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.reduce)
             new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.reduce)
             new_df['visibility'] = new_df['visibility'].apply(self.reduce)
@@ -149,7 +152,7 @@ class BugDataset(Dataset):
         return np.nan_to_num((x-self.means_3d)/self.std_3d)
 
     def normalise(self, df):
-        if self.reduce:
+        if self.reduced:
             kp = 28
         else:
             kp = 62
