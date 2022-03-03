@@ -13,7 +13,7 @@ class Train_CPM_Network():
         self.accz_dists = accurate_dist
         self.train_ds = train_dataloader
         self.valid_ds = valid_dataloader
-        # self.criterion = nn.MSELoss.cuda()
+        self.criterion = JointsMSELoss(self.device, use_target_weight=False)
     def train_step(self):
         size = len(self.train_ds.dataset)
         correct = 0
@@ -23,24 +23,24 @@ class Train_CPM_Network():
         heat_weight =  1.0
         self.model.train()
         for data in tqdm(self.train_ds, desc="Training Step"):
-            image = data['image']
-            center = data['centermap']
-            heatmap = data['heatmap']
+            image = data['image'].to(self.device, dtype=torch.float)
+            center = data['centermap'].to(self.device, dtype=torch.float)
+            heatmap = data['heatmap'].to(self.device, dtype=torch.float)
             vis = data['visibility']
             heat_weight = ((heatmap.shape[1]-1)**2)*8
-            
-            input_var = image.to(self.device, dtype=torch.float)
-            heatmap_var = heatmap.to(self.device, dtype=torch.float)
-            centermap_var = center.to(self.device, dtype=torch.float)
+
+            input_var = torch.autograd.Variable(image)
+            heatmap_var = torch.autograd.Variable(heatmap)
+            centermap_var = torch.autograd.Variable(center)
 
             heat1, heat2, heat3, heat4, heat5, heat6 = self.model(input_var, centermap_var)
             
-            loss1 = self.loss_func(heat1, heatmap_var, vis) * heat_weight
-            loss2 = self.loss_func(heat2, heatmap_var, vis) * heat_weight
-            loss3 = self.loss_func(heat3, heatmap_var, vis) * heat_weight
-            loss4 = self.loss_func(heat4, heatmap_var, vis) * heat_weight
-            loss5 = self.loss_func(heat5, heatmap_var, vis) * heat_weight
-            loss6 = self.loss_func(heat6, heatmap_var, vis) * heat_weight
+            loss1 = self.criterion(heat1, heatmap_var, vis) * heat_weight
+            loss2 = self.criterion(heat2, heatmap_var, vis) * heat_weight
+            loss3 = self.criterion(heat3, heatmap_var, vis) * heat_weight
+            loss4 = self.criterion(heat4, heatmap_var, vis) * heat_weight
+            loss5 = self.criterion(heat5, heatmap_var, vis) * heat_weight
+            loss6 = self.criterion(heat6, heatmap_var, vis) * heat_weight
 
             # print(loss1.shape, loss2.shape, loss3.shape,  loss4.shape, loss5.shape, loss6.shape)
             loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
@@ -49,7 +49,7 @@ class Train_CPM_Network():
             pred = torch.from_numpy(self.get_kpts(heat6)).to(self.device, dtype=torch.float)
             y = torch.from_numpy(self.get_kpts(heatmap)).to(self.device, dtype=torch.float)
 
-            correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
+            # correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
 
             # Backpropagation
             self.optimiser.zero_grad()
@@ -70,24 +70,24 @@ class Train_CPM_Network():
         test_loss, correct = 0, 0
         with torch.no_grad():
             for data in tqdm(self.valid_ds, desc="Validation Step"):
-                image = data['image']
-                center = data['centermap']
-                heatmap = data['heatmap']
+                image = data['image'].to(self.device, dtype=torch.float)
+                center = data['centermap'].to(self.device, dtype=torch.float)
+                heatmap = data['heatmap'].to(self.device, dtype=torch.float)
                 vis = data['visibility']
                 heat_weight = ((heatmap.shape[1]-1)**2)*8
 
-                input_var = image.to(self.device, dtype=torch.float)
-                heatmap_var = heatmap.to(self.device, dtype=torch.float)
-                centermap_var = center.to(self.device, dtype=torch.float)
+                input_var = torch.autograd.Variable(image)
+                heatmap_var = torch.autograd.Variable(heatmap)
+                centermap_var = torch.autograd.Variable(center)
 
                 heat1, heat2, heat3, heat4, heat5, heat6 = self.model(input_var, centermap_var)
                 
-                loss1 = self.loss_func(heat1, heatmap_var, vis) * heat_weight
-                loss2 = self.loss_func(heat2, heatmap_var, vis) * heat_weight
-                loss3 = self.loss_func(heat3, heatmap_var, vis) * heat_weight
-                loss4 = self.loss_func(heat4, heatmap_var, vis) * heat_weight
-                loss5 = self.loss_func(heat5, heatmap_var, vis) * heat_weight
-                loss6 = self.loss_func(heat6, heatmap_var, vis) * heat_weight
+                loss1 = self.criterion(heat1, heatmap_var, vis) * heat_weight
+                loss2 = self.criterion(heat2, heatmap_var, vis) * heat_weight
+                loss3 = self.criterion(heat3, heatmap_var, vis) * heat_weight
+                loss4 = self.criterion(heat4, heatmap_var, vis) * heat_weight
+                loss5 = self.criterion(heat5, heatmap_var, vis) * heat_weight
+                loss6 = self.criterion(heat6, heatmap_var, vis) * heat_weight
 
                 loss = loss1 + loss2 + loss3 + loss4 + loss5 + loss6
 
@@ -96,7 +96,7 @@ class Train_CPM_Network():
                 pred = torch.from_numpy(self.get_kpts(heat6)).to(self.device, dtype=torch.float)
                 y = torch.from_numpy(self.get_kpts(heatmap)).to(self.device, dtype=torch.float)
                 
-                correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
+                # correct += (abs(pred - y)<self.accz_dists.to(self.device)).type(torch.float).sum().item()
 
         test_loss /= num_batches
         val_acc = (correct / size)*100
@@ -139,8 +139,51 @@ class Train_CPM_Network():
                     new_mask[m][i] = torch.ones((pred.shape[2],pred.shape[3]))
                 elif mask[m][i] == 0:
                     new_mask[m][i] =  torch.zeros((pred.shape[2],pred.shape[3]))
-        # print(new_mask.shape)
-        # print((pred - expect).shape)
         masked = (pred - expect)*new_mask
         return torch.mean(masked**2)
-    
+
+class JointsMSELoss(nn.Module):
+    """MSE loss for heatmaps.
+    Args:
+        use_target_weight (bool): Option to use weighted MSE loss.
+            Different joint types may have different target weights.
+        loss_weight (float): Weight of the loss. Default: 1.0.
+    """
+
+    def __init__(self,device, use_target_weight=False, loss_weight=1.):
+        super().__init__()
+        self.device = device
+        self.criterion = nn.MSELoss()
+        self.use_target_weight = use_target_weight
+        self.loss_weight = loss_weight
+
+    def forward(self, output, target, target_weight):
+        """Forward function."""
+        batch_size = output.size(0)
+        num_joints = output.size(1)
+        
+        # target_weight =  torch.cat((torch.from_numpy(np.array([[1]]*len(target_weight))), target_weight), dim= 1).to(self.device)
+        # new_mask = torch.zeros(output.shape,device=self.device)
+        # for m in range(len(target_weight)):
+        #     for i in range(len(target_weight[m])):
+        #         if target_weight[m][i] == 1:
+        #             new_mask[m][i] = torch.ones((output.shape[2],output.shape[3]))
+        #         elif target_weight[m][i] == 0:
+        #             new_mask[m][i] =  torch.zeros((output.shape[2],output.shape[3]))
+        # target_weight = new_mask
+        heatmaps_pred = output.reshape(
+            (batch_size, num_joints, -1)).split(1, 1)
+        heatmaps_gt = target.reshape((batch_size, num_joints, -1)).split(1, 1)
+
+        loss = 0.
+
+        for idx in range(num_joints):
+            heatmap_pred = heatmaps_pred[idx].squeeze(1)
+            heatmap_gt = heatmaps_gt[idx].squeeze(1)
+            if self.use_target_weight:
+                loss += self.criterion(heatmap_pred * target_weight[: idx],
+                                       heatmap_gt * target_weight[:, idx])
+            else:
+                loss += self.criterion(heatmap_pred, heatmap_gt)
+
+        return loss / num_joints * self.loss_weight
