@@ -232,27 +232,23 @@ class BugDataset(Dataset):
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample):
-        sample_copy = deepcopy(sample)
-        image = sample_copy['image']
-        name = sample_copy['file_name']
+        name = sample['file_name']
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
+        img = sample['image'].transpose((2, 0, 1))
 
-        image = image.transpose((2, 0, 1))
-
-        heatmap = sample_copy.pop('heatmap')
-        center =  sample_copy.pop('centermap')
-
+        heatmap = sample.pop('heatmap')
         heatmap = heatmap.transpose((2, 0, 1))
 
+        center =  sample.pop('centermap')
         center = center.transpose((2, 0, 1))
 
-        sample_keys = list(sample_copy.keys())
-        sample_data = list(sample_copy.values())
-        image = torch.from_numpy(image)
-
-        dic ={'image': image, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center),'file_name':name}
+        sample_keys = list(sample.keys())
+        sample_data = list(sample.values())
+        img = torch.from_numpy(img)
+        print(img.shape)
+        dic ={'image': img, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center),'file_name':name}
         dic[sample_keys[1]] = sample_data[1]
         for x in range(2,len(sample_keys)):
             dic[sample_keys[x]] = torch.FloatTensor(sample_data[x])

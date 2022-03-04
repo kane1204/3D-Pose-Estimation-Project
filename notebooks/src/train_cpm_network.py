@@ -82,7 +82,7 @@ class Train_CPM_Network():
                 input_var = torch.autograd.Variable(image)
                 heatmap_var = torch.autograd.Variable(heatmap)
                 centermap_var = torch.autograd.Variable(center)
-
+                
                 heat1, heat2, heat3, heat4, heat5, heat6 = self.model(input_var, centermap_var)
                 
                 loss1 = self.criterion(heat1, heatmap_var, vis) * heat_weight
