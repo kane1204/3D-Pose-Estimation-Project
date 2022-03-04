@@ -1,3 +1,4 @@
+from copy import deepcopy
 import os
 from tkinter import S
 import cv2
@@ -20,6 +21,7 @@ class BugDataset(Dataset):
                 on a sample.
         """
         self.xy = 640
+        self.transform_x_y = 152
         self.center = 3
         self.means_2d = []
         self.means_3d = []
@@ -53,15 +55,11 @@ class BugDataset(Dataset):
             new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.reduce)
             new_df['visibility'] = new_df['visibility'].apply(self.reduce)          
 
-        # Created some sort of crop algorithm to crop the image with the bounding box in mind preferably a array (C*W*H) WHERE W = H = 368
-
-        # TODO: Crop code?
-
-        self.transform_x_y = 152
-        self.scale_percent = (self.transform_x_y/self.xy)*100
-        # Second Correct the 2D keypoint
-        new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
-        new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
+        
+        # self.scale_percent = (self.transform_x_y/self.xy)*100
+        # # Second Correct the 2D keypoint
+        # new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
+        # new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
 
         # Centralising dataset around center keypoint center
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.centralise_3d)
@@ -80,30 +78,48 @@ class BugDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-
+        sample = {}
         img_name = os.path.join(self.root_dir,
                                 self.bugs_frame.iloc[idx, 0])
-        # Scales Image by a factor given
-        image = cv2.resize(io.imread(img_name), (self.transform_x_y,self.transform_x_y))
-
+        # Reads Image
+        image = io.imread(img_name)
+        w, h, _ = image.shape
         df_columns = self.bugs_frame.columns.values.tolist()
-        sample = {'image':image}
+        
         # Add the rest of the attributes
         for x in range(len(df_columns)):    
-            sample[df_columns[x]] = self.bugs_frame.iloc[idx,x]
+            sample[df_columns[x]] = deepcopy(self.bugs_frame.iloc[idx,x])
 
+
+        # Create image crop and scale to desired dims 152
+        # Crop KP to bbox scaled img
+        cropped_kp = self.crop_scale(sample['key_points_2D'],w -(w-sample['bounding_box'][0]),h - (h-sample['bounding_box'][1]))
+        # Crop to bbox
+        cropped  = image[sample['bounding_box'][1]:sample['bounding_box'][3],sample['bounding_box'][0]:sample['bounding_box'][2]]
+        # Scale 2D Keypoints to target
+        x_scale = (self.transform_x_y/cropped.shape[1])
+        y_scale = (self.transform_x_y/cropped.shape[0])
+
+        cropped_kp[:,0] = cropped_kp[:,0]*x_scale
+        cropped_kp[:,1] = cropped_kp[:,1]*y_scale
+
+        # Scales Image to target
+        resized_img = cv2.resize(cropped, (self.transform_x_y,self.transform_x_y))
+        # Writing new scaled to dict
+        sample['key_points_2D'] = cropped_kp
+        sample.update({'image': resized_img.astype('uint8')})
 
         # Create HEAT & CENTER MAPS
         sample['heatmap'] = None
         sample['centermap'] = None
         # Create Heatmap guassian for idx
         heat_map = 0
-        keypoints = sample['key_points_2D']
-        heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(keypoints) + 1), dtype=np.float32)
-        for i in range(len(keypoints)):
+        # keypoints = sample['key_points_2D']
+        heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(sample['key_points_2D']) + 1), dtype=np.float32)
+        for i in range(len(sample['key_points_2D'])):
             if sample['visibility'][i] == 1:
-                x = int(keypoints[i][0]) * 1.0 / self.stride
-                y = int(keypoints[i][1]) * 1.0 / self.stride
+                x = int(sample['key_points_2D'][i][0]) * 1.0 / self.stride
+                y = int(sample['key_points_2D'][i][1]) * 1.0 / self.stride
                 heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
                 heat_map[heat_map > 1] = 1
                 heat_map[heat_map < 0.0099] = 0
@@ -113,10 +129,8 @@ class BugDataset(Dataset):
         sample['heatmap'] = heat
 
         # Center Map Calculation
-        center_x = (keypoints[:,0][keypoints[:,0] < self.transform_x_y].max() +
-                    keypoints[:,0][keypoints[:,0] > 0].min()) / 2
-        center_y = (keypoints[:,1][keypoints[:,1] < self.transform_x_y].max() +
-                    keypoints[:,1][keypoints[:,1] > 0].min()) / 2
+        center_x = (sample['bounding_box'][2]-sample['bounding_box'][0]) / 2
+        center_y = (sample['bounding_box'][3]-sample['bounding_box'][1]) / 2
 
         
         sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
@@ -135,7 +149,12 @@ class BugDataset(Dataset):
         return sample
     def scale_data(self,sample):
         return sample* self.scale_percent / 100
-        
+    
+    def crop_scale(self,kp, x_shift, y_shift):
+        kp[:,0]=  kp[:,0]-x_shift
+        kp[:,1]=  kp[:,1]-y_shift
+        return kp
+
     def centralise_2d(self, sample):
         x_diff, y_diff = sample[self.center-1][0], sample[self.center-1][1]
         for i in range(len(sample)):
@@ -205,7 +224,7 @@ class BugDataset(Dataset):
         x_coordinates, y_coordinates = zip(*keypoints)
         x_coordinates = [i for i in x_coordinates if i != 0]
         y_coordinates = [i for i in y_coordinates if i != 0]
-        return np.array([round(min(x_coordinates)-padding), round(min(y_coordinates)-padding), round(max(x_coordinates)+padding), round(max(y_coordinates)+padding)])
+        return np.array([int(min(x_coordinates)-padding), int(min(y_coordinates)-padding), int(max(x_coordinates)+padding), int(max(y_coordinates)+padding)])
     
     def reduce(self, sample):
         return sample[self.reduced_kp]
@@ -213,23 +232,27 @@ class BugDataset(Dataset):
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample):
-        image = sample['image']
+        sample_copy = deepcopy(sample)
+        image = sample_copy['image']
+        name = sample_copy['file_name']
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
+
         image = image.transpose((2, 0, 1))
-        heatmap = sample.pop('heatmap')
-        center =  sample.pop('centermap')
+
+        heatmap = sample_copy.pop('heatmap')
+        center =  sample_copy.pop('centermap')
 
         heatmap = heatmap.transpose((2, 0, 1))
 
         center = center.transpose((2, 0, 1))
 
-        sample_keys = list(sample.keys())
-        sample_data = list(sample.values())
+        sample_keys = list(sample_copy.keys())
+        sample_data = list(sample_copy.values())
         image = torch.from_numpy(image)
 
-        dic ={'image': image, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center)}
+        dic ={'image': image, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center),'file_name':name}
         dic[sample_keys[1]] = sample_data[1]
         for x in range(2,len(sample_keys)):
             dic[sample_keys[x]] = torch.FloatTensor(sample_data[x])
