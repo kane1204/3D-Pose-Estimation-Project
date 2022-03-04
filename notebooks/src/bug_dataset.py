@@ -140,12 +140,11 @@ class BugDataset(Dataset):
         sample['centermap'][:, :, 0] = center_map
 
         # Standardises 2d & 3d Keypoints
-        # sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
+        sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
         sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
 
         if self.transform:
             sample = self.transform(sample)
-
         return sample
     def scale_data(self,sample):
         return sample* self.scale_percent / 100
@@ -232,24 +231,26 @@ class BugDataset(Dataset):
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample):
+        sample = deepcopy(sample)
         name = sample['file_name']
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
         img = sample['image'].transpose((2, 0, 1))
+        img_tensor = torch.IntTensor(img)
 
-        heatmap = sample.pop('heatmap')
+        heatmap = sample['heatmap']
         heatmap = heatmap.transpose((2, 0, 1))
 
-        center =  sample.pop('centermap')
+        center =  sample['centermap']
         center = center.transpose((2, 0, 1))
 
-        sample_keys = list(sample.keys())
-        sample_data = list(sample.values())
-        img = torch.from_numpy(img)
-        print(img.shape)
-        dic ={'image': img, 'heatmap':torch.from_numpy(heatmap), 'centermap':torch.from_numpy(center),'file_name':name}
-        dic[sample_keys[1]] = sample_data[1]
-        for x in range(2,len(sample_keys)):
-            dic[sample_keys[x]] = torch.FloatTensor(sample_data[x])
+        dic ={'image': img_tensor, 'heatmap':torch.from_numpy(heatmap), 
+              'centermap':torch.from_numpy(center),'file_name':name,
+              'bounding_box':torch.from_numpy(sample['bounding_box']),
+              'key_points_2D':torch.from_numpy(sample['key_points_2D']),
+              'key_points_3D':torch.from_numpy(sample['key_points_3D']),
+              'visibility':torch.from_numpy(sample['visibility'])}
+        
+        # print("After Adding to Dict",dic['image'].shape)
         return dic
