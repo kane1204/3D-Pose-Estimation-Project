@@ -128,10 +128,11 @@ class BugDataset(Dataset):
         heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
         sample['heatmap'] = heat
 
-        # Center Map Calculation
-        center_x = (sample['bounding_box'][2]-sample['bounding_box'][0]) / 2
-        center_y = (sample['bounding_box'][3]-sample['bounding_box'][1]) / 2
-
+        # Center Map Calculation due to the scaling of the image to 152
+        center_x = (self.transform_x_y) / 2
+        center_y = (self.transform_x_y) / 2
+        # Bounding box is now just a 0,0 and 152,152
+        sample["bounding_box"]= np.array([0,0,152,152])
         
         sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
         center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
