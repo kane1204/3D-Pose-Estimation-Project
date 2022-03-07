@@ -132,7 +132,7 @@ class BugDataset(Dataset):
         center_x = (self.transform_x_y) / 2
         center_y = (self.transform_x_y) / 2
         # Bounding box is now just a 0,0 and 152,152
-        sample["bounding_box"]= [0,0,152,152]
+        sample["bounding_box"]= np.array([0,0,152,152])
         
         sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
         center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
