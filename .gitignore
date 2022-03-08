@@ -1,2 +1,8 @@
 data/*
 notebooks/src/__pycache__/*
+results/cpm_model_20220307-181117_train_acc.txt
+results/cpm_model_20220307-181117_train_loss.txt
+results/cpm_model_20220307-181117_val_acc.txt
+results/cpm_model_20220307-181117_val_loss.txt
+models/*
+models/estimator2d.pt

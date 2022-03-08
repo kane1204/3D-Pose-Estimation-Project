@@ -28,7 +28,7 @@ class BugDataset(Dataset):
         self.std_2d =  []
         self.std_3d = []
         self.stride = 2
-        self.sigma = 3.0
+        self.sigma = 0.9
         #                   Body    r_1      r_2        r_3       l_1       l_2        l_3       a_r        a_l
         self.reduced = reduced
         self.reduced_kp = [0,2,3,6, 7,10,13, 14,17,20 , 21,24,27, 28,31,34, 35,38,41, 42,45,48,  52,54,55, 58,60,61]

@@ -1,4 +1,5 @@
 from torch import nn
+# Model For implementing simple-effective-3D pose-baseline
 class LiftingNet(nn.Module):
     # Based of https://arxiv.org/abs/1705.03098
     def __init__(self,n_inputs,hidden,n_output):
@@ -37,7 +38,7 @@ class LiftingNet(nn.Module):
         return self.out(x)
 
 
-
+# Taken from https://github.com/wuyenlin/SimpleBaseline/blob/main/common/model.py
 class Linear(nn.Module):
     def __init__(self, linear_size, p_dropout=0.5):
         super(Linear, self).__init__()
