@@ -19,6 +19,7 @@ class Train_simple_2d_Network():
 
     def train_step(self):
         train_epoch_acc, train_epoch_loss = 0, 0
+        batches = 0
         self.model.train()
         for data in tqdm(self.train_ds, desc="Training Step", disable=True):
             input = data['image'].to(self.device, dtype=torch.float)
@@ -39,20 +40,19 @@ class Train_simple_2d_Network():
             #  Adds Loss to losses list and acc
             train_epoch_loss += train_loss.item()
             train_epoch_acc += train_acc.item()
+            batches += 1
             # Stops training after one batch
-            break
-        
-        # One batch break code
-        train_acc = train_epoch_acc
-        train_loss = train_epoch_loss
+            # break
+
         # Normal calculation
-        # train_acc = train_epoch_acc/len(self.train_ds)
-        # train_loss = train_epoch_loss/len(self.train_ds)
+        train_acc = train_epoch_acc/batches
+        train_loss = train_epoch_loss/batches
         return train_acc, train_loss
 
     def valid_step(self):
         val_epoch_acc, val_epoch_loss = 0, 0
         self.model.eval()
+        batches = 0
         with torch.no_grad():
             for data in tqdm(self.valid_ds, desc="Validation Step", disable=True):
                 input = data['image'].to(self.device, dtype=torch.float)
@@ -61,14 +61,15 @@ class Train_simple_2d_Network():
 
                 pred_heatmap =  self.model(input)
 
-                loss = self.criterion(pred_heatmap, target_heatmap, heat_weight)
+                val_loss = self.criterion(pred_heatmap, target_heatmap, heat_weight)
 
-                _, batch_acc, _, _ = accuracy(pred_heatmap.detach().cpu().numpy(),
+                _, val_acc, _, _ = accuracy(pred_heatmap.detach().cpu().numpy(),
                                               target_heatmap.detach().cpu().numpy())
                 val_epoch_loss += val_loss.item()
                 val_epoch_acc += val_acc.item()
-        val_acc = val_epoch_acc/len(self.valid_ds)
-        val_loss = val_epoch_loss/len(self.valid_ds)
+                batches +=1
+        val_acc = val_epoch_acc/batches
+        val_loss = val_epoch_loss/batches
         # print(f"Validation Error: \n Accuracy: {val_acc:>4f}%, Avg loss: {val_loss:>8f} \n")
         return val_acc, val_loss
         
@@ -83,14 +84,14 @@ class Train_simple_2d_Network():
             train_acc, train_loss, val_acc, val_loss  = 0,0,0,0
 
             train_acc, train_loss = self.train_step()
-            # val_acc, val_loss = self.valid_step()
+            val_acc, val_loss = self.valid_step()
 
             # Append Training and validation stats to file
             self.append_file(f"{file_desc}_train_loss", train_loss)
             self.append_file(f"{file_desc}_train_acc", train_acc)
             self.append_file(f"{file_desc}_val_loss", val_loss)
             self.append_file(f"{file_desc}_val_acc", val_acc)
-            # print(f'Finished Epoch {t+0:03}: | Train Acc: {train_acc:.3f}| Train Loss: {train_loss:.5f} | Val Acc: {val_acc:.3f} | Val Loss: {val_loss:.5f}')
+            print(f'Finished Epoch {t+0:03}: | Train Acc: {train_acc:.3f}| Train Loss: {train_loss:.5f} | Val Acc: {val_acc:.3f} | Val Loss: {val_loss:.5f}')
 
         print("Done!")
         return self.model
