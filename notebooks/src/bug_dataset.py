@@ -21,14 +21,16 @@ class BugDataset(Dataset):
                 on a sample.
         """
         self.xy = 640
-        self.transform_x_y = 152
+        self.transform_x_y = 256
         self.center = 3
         self.means_2d = []
         self.means_3d = []
         self.std_2d =  []
         self.std_3d = []
         self.stride = 2
-        self.sigma = 0.9
+        self.sigma = 2
+
+        self.heatmap_size = [64,64]
         #                   Body    r_1      r_2        r_3       l_1       l_2        l_3       a_r        a_l
         self.reduced = reduced
         self.reduced_kp = [0,2,3,6, 7,10,13, 14,17,20 , 21,24,27, 28,31,34, 35,38,41, 42,45,48,  52,54,55, 58,60,61]
@@ -55,17 +57,11 @@ class BugDataset(Dataset):
             new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.reduce)
             new_df['visibility'] = new_df['visibility'].apply(self.reduce)          
 
-        
-        # self.scale_percent = (self.transform_x_y/self.xy)*100
-        # # Second Correct the 2D keypoint
-        # new_df['key_points_2D'] = new_df['key_points_2D'].apply(self.scale_data)
-        # new_df["bounding_box"] = new_df["bounding_box"].apply(self.scale_data)
-
         # Centralising dataset around center keypoint center
         new_df['key_points_3D'] = new_df['key_points_3D'].apply(self.centralise_3d)
 
         # Calculate normals
-        self.normalise(new_df)
+        self.calculate_normalise_data(new_df)
 
         # Original DF being used
         self.bugs_frame = new_df
@@ -109,37 +105,29 @@ class BugDataset(Dataset):
         sample['key_points_2D'] = cropped_kp
         sample.update({'image': resized_img.astype('uint8')})
 
-        # Create HEAT & CENTER MAPS
+        # Create HEATMAP
         sample['heatmap'] = None
-        sample['centermap'] = None
-        # Create Heatmap guassian for idx
-        heat_map = 0
-        # keypoints = sample['key_points_2D']
-        heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(sample['key_points_2D']) + 1), dtype=np.float32)
-        for i in range(len(sample['key_points_2D'])):
-            if sample['visibility'][i] == 1:
-                x = int(sample['key_points_2D'][i][0]) * 1.0 / self.stride
-                y = int(sample['key_points_2D'][i][1]) * 1.0 / self.stride
-                heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
-                heat_map[heat_map > 1] = 1
-                heat_map[heat_map < 0.0099] = 0
-                heat[:, :, i + 1] = heat_map
-
-        heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
-        sample['heatmap'] = heat
-
-        # Center Map Calculation due to the scaling of the image to 152
+        # Create Heatmaps for CPM 
+        # sample['centermap'] = None
+        # sample['heatmap'] = self.create_heatmap_cpm(sample['key_points_2D'],sample['visibility'])
+        # Create Heatmaps for Simple 2d method
+        heatmap, heat_weight = self.create_heatmaps_simple(sample['key_points_2D'],sample['visibility'])
+        sample['heatmap'] = heatmap
+        sample['heat_weight'] = heat_weight
+        # Center Map Calculation due to the scaling of the image to self.transform_x_y
         center_x = (self.transform_x_y) / 2
         center_y = (self.transform_x_y) / 2
-        # Bounding box is now just a 0,0 and 152,152
-        sample["bounding_box"]= np.array([0,0,152,152])
-        
-        sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
-        center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
-        center_map[center_map > 1] = 1
-        center_map[center_map < 0.0099] = 0
-        sample['centermap'][:, :, 0] = center_map
 
+        # # Create Centermap For CPM
+        # sample['centermap'] = np.zeros((self.transform_x_y, self.transform_x_y, 1), dtype=np.float32)
+        # center_map = self.guassian_kernel(size_h=self.transform_x_y, size_w=self.transform_x_y,  center_x=center_x, center_y=center_y, sigma=self.sigma)
+        # center_map[center_map > 1] = 1
+        # center_map[center_map < 0.0099] = 0
+        # sample['centermap'][:, :, 0] = center_map
+
+        # Bounding box is now just a 0,0 and 152,152
+        sample["bounding_box"]= np.array([0,0,self.transform_x_y,self.transform_x_y])
+        
         # Standardises 2d & 3d Keypoints
         sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
         sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
@@ -147,6 +135,7 @@ class BugDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
         return sample
+
     def scale_data(self,sample):
         return sample* self.scale_percent / 100
     
@@ -177,7 +166,7 @@ class BugDataset(Dataset):
         np.seterr(invalid='ignore')
         return np.nan_to_num((x-self.means_3d)/self.std_3d)
 
-    def normalise(self, df):
+    def calculate_normalise_data(self, df):
         if self.reduced:
             kp = 28
         else:
@@ -209,11 +198,7 @@ class BugDataset(Dataset):
             self.means_3d.append(np.mean(fixed_array_3d[:,x], axis=0))
         self.means_3d = np.array(self.means_3d).reshape((kp,3))
         self.std_3d = np.array(self.std_3d).reshape((kp,3))
-
-        # df['key_points_2D'] = df['key_points_2D'].apply(self.normal_2d)
-        # df['key_points_3D'] = df['key_points_3D'].apply(self.normal_3d)
-        # return df
-        
+ 
     def guassian_kernel(self, size_w, size_h, center_x, center_y, sigma):
         gridy, gridx = np.mgrid[0:size_h, 0:size_w]
         D2 = (gridx - center_x) ** 2 + (gridy - center_y) ** 2
@@ -229,6 +214,73 @@ class BugDataset(Dataset):
     def reduce(self, sample):
         return sample[self.reduced_kp]
 
+    def create_heatmap_cpm(self, kps,vis):
+        # Create Heatmap guassian for idx
+        heat_map = 0
+        heat = np.zeros((round(self.transform_x_y/self.stride), round(self.transform_x_y/self.stride), len(kps) + 1), dtype=np.float32)
+        for i in range(len(kps)):
+            if vis[i] == 1:
+                x = int(kps[i][0]) * 1.0 / self.stride
+                y = int(kps[i][1]) * 1.0 / self.stride
+                heat_map = self.guassian_kernel(size_h=self.transform_x_y / self.stride, size_w=self.transform_x_y / self.stride, center_x=x, center_y=y, sigma=self.sigma)
+                heat_map[heat_map > 1] = 1
+                heat_map[heat_map < 0.0099] = 0
+                heat[:, :, i + 1] = heat_map
+
+        heat[:, :, 0] = 1.0 - np.max(heat[:, :, 1:], axis=2)
+
+    def create_heatmaps_simple(self, kps, vis):
+        '''
+        :param kps:  [num_kps, 2]
+        :param vis: [num_kps, 2]
+        :return: target, target_weight(1: visible, 0: invisible)
+        '''
+        num_kps = len(kps)
+        target_weight = np.ones((num_kps, 1), dtype=np.float32)
+        target_weight[:,0] =  vis
+
+        
+        target = np.zeros((num_kps,
+                            self.heatmap_size[1],
+                            self.heatmap_size[0]),
+                            dtype=np.float32)
+
+        tmp_size = self.sigma * 3
+
+        for joint_id in range(num_kps):
+            feat_stride = [int(self.transform_x_y/ self.heatmap_size[0]),int(self.transform_x_y/ self.heatmap_size[1])] 
+            mu_x = int(kps[joint_id][0] / feat_stride[0] + 0.5)
+            mu_y = int(kps[joint_id][1] / feat_stride[1] + 0.5)
+            # Check that any part of the gaussian is in-bounds
+            ul = [int(mu_x - tmp_size), int(mu_y - tmp_size)]
+            br = [int(mu_x + tmp_size + 1), int(mu_y + tmp_size + 1)]
+            if ul[0] >= self.heatmap_size[0] or ul[1] >= self.heatmap_size[1] \
+                    or br[0] < 0 or br[1] < 0:
+                # If not, just return the image as is
+                target_weight[joint_id] = 0
+                continue
+
+            # Generate gaussian
+            size = 2 * tmp_size + 1
+            x = np.arange(0, size, 1, np.float32)
+            y = x[:, np.newaxis]
+            x0 = y0 = size // 2
+            # The gaussian is not normalized, we want the center value to equal 1
+            g = np.exp(- ((x - x0) ** 2 + (y - y0) ** 2) / (2 * self.sigma ** 2))
+
+            # Usable gaussian range
+            g_x = max(0, -ul[0]), min(br[0], self.heatmap_size[0]) - ul[0]
+            g_y = max(0, -ul[1]), min(br[1], self.heatmap_size[1]) - ul[1]
+            # Image range
+            img_x = max(0, ul[0]), min(br[0], self.heatmap_size[0])
+            img_y = max(0, ul[1]), min(br[1], self.heatmap_size[1])
+
+            v = target_weight[joint_id]
+            if v > 0.5:
+                target[joint_id][img_y[0]:img_y[1], img_x[0]:img_x[1]] = \
+                    g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
+
+        return target, target_weight
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
     def __call__(self, sample):
@@ -240,14 +292,17 @@ class ToTensor(object):
         img = sample['image'].transpose((2, 0, 1))
         img_tensor = torch.IntTensor(img)
 
-        heatmap = sample['heatmap']
-        heatmap = heatmap.transpose((2, 0, 1))
+        # CPM Dict
+        # dic ={'image': img_tensor, 'heatmap':torch.from_numpy(sample['heatmap'].transpose((2, 0, 1))), 
+        #       'centermap':torch.from_numpy(sample['centermap'].transpose((2, 0, 1))),'file_name':name,
+        #       'bounding_box':torch.from_numpy(sample['bounding_box']),
+        #       'key_points_2D':torch.from_numpy(sample['key_points_2D']),
+        #       'key_points_3D':torch.from_numpy(sample['key_points_3D']),
+        #       'visibility':torch.from_numpy(sample['visibility'])}
 
-        center =  sample['centermap']
-        center = center.transpose((2, 0, 1))
-
-        dic ={'image': img_tensor, 'heatmap':torch.from_numpy(heatmap), 
-              'centermap':torch.from_numpy(center),'file_name':name,
+        # Simple 2d Dict
+        dic ={'image': img_tensor, 'heatmap':torch.from_numpy(sample['heatmap']), 
+              'heat_weight':torch.from_numpy(sample['heat_weight']),'file_name':name,
               'bounding_box':torch.from_numpy(sample['bounding_box']),
               'key_points_2D':torch.from_numpy(sample['key_points_2D']),
               'key_points_3D':torch.from_numpy(sample['key_points_3D']),

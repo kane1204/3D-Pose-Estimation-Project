@@ -6,3 +6,5 @@ results/cpm_model_20220307-181117_val_acc.txt
 results/cpm_model_20220307-181117_val_loss.txt
 models/*
 models/estimator2d.pt
+notebooks/src/eval/__pycache__/accuracies.cpython-38.pyc
+notebooks/src/eval/__pycache__/loss.cpython-38.pyc
