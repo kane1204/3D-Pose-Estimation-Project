@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch.nn as nn
-
+#  Taken from https://github.com/Microsoft/human-pose-estimation.pytorch
 class JointsMSELoss(nn.Module):
     def __init__(self, use_target_weight=True):
         super(JointsMSELoss, self).__init__()

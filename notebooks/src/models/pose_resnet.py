@@ -3,7 +3,7 @@
 # Licensed under the MIT License.
 # Written by Bin Xiao (Bin.Xiao@microsoft.com)
 # ------------------------------------------------------------------------------
-
+#  Taken from https://github.com/Microsoft/human-pose-estimation.pytorch
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function

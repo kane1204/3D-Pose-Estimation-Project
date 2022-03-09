@@ -91,34 +91,10 @@ class Train_simple_2d_Network():
             self.append_file(f"{file_desc}_train_acc", train_acc)
             self.append_file(f"{file_desc}_val_loss", val_loss)
             self.append_file(f"{file_desc}_val_acc", val_acc)
-            print(f'Finished Epoch {t+0:03}: | Train Acc: {train_acc:.3f}| Train Loss: {train_loss:.5f} | Val Acc: {val_acc:.3f} | Val Loss: {val_loss:.5f}')
+            print(f'Finished Epoch {t+0:03}: | Train Acc: {train_acc:.3f} | Train Loss: {train_loss:.5f} | Val Acc: {val_acc:.3f} | Val Loss: {val_loss:.5f}')
 
         print("Done!")
         return self.model
-    
-    def get_kpts(self, maps, img_h = 152.0, img_w = 152.0):
-        maps = maps.clone().cpu().data.numpy()
-        map_6 = maps[0]
-
-        kpts = []
-        for m in map_6[1:]:
-            h, w = np.unravel_index(m.argmax(), m.shape)
-            x = int(w * img_w / m.shape[1])
-            y = int(h * img_h / m.shape[0])
-            kpts.append([x,y])
-        return np.array(kpts)
-
-    def loss_func(self, pred, expect, mask):
-        mask =  torch.cat((torch.from_numpy(np.array([[1]]*len(mask))), mask), dim= 1).to(self.device)
-        new_mask = torch.zeros(pred.shape,device=self.device)
-        for m in range(len(mask)):
-            for i in range(len(mask[m])):
-                if mask[m][i] == 1:
-                    new_mask[m][i] = torch.ones((pred.shape[2],pred.shape[3]))
-                elif mask[m][i] == 0:
-                    new_mask[m][i] =  torch.zeros((pred.shape[2],pred.shape[3]))
-        masked = (pred - expect)*new_mask
-        return torch.mean(masked**2)
 
     def append_file(self,filename, data):
         file1 = open(f"../results/{filename}.txt", "a")  # append mode
