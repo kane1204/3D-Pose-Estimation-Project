@@ -205,11 +205,36 @@ class BugDataset(Dataset):
         return np.exp(-D2 / 2.0 / sigma / sigma)
     
     def bbox_fix(self, keypoints):
-        padding = 1
+        threshold = 25
         x_coordinates, y_coordinates = zip(*keypoints)
         x_coordinates = [i for i in x_coordinates if i != 0]
         y_coordinates = [i for i in y_coordinates if i != 0]
-        return np.array([int(min(x_coordinates)-padding), int(min(y_coordinates)-padding), int(max(x_coordinates)+padding), int(max(y_coordinates)+padding)])
+        x1, y1 = int(min(x_coordinates)), int(min(y_coordinates))
+        x2, y2 = int(max(x_coordinates)), int(max(y_coordinates))
+        
+        diffx1 = x1
+        if diffx1 > threshold:
+            x1 -= threshold
+        else:
+             x1 -= diffx1
+
+        diffy1 = y1
+        if diffy1 > threshold:
+            y1 -= threshold
+        else:
+            y1 -= diffy1
+
+        diffx2 = self.xy-x2
+        if diffx2 > threshold:
+            x2 += threshold
+        else:
+            x2 += diffx2
+        diffy2 = self.xy - y2
+        if diffy2 > threshold:
+            y2 += threshold
+        else:
+            y2 += diffy2
+        return np.array([x1,y1,x2,y2])
     
     def reduce(self, sample):
         return sample[self.reduced_kp]
