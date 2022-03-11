@@ -128,12 +128,14 @@ class BugDataset(Dataset):
         # Bounding box is now just a 0,0 and 152,152
         sample["bounding_box"]= np.array([0,0,self.transform_x_y,self.transform_x_y])
         
-        # Standardises 2d & 3d Keypoints
-        sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
-        sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
+       
 
         if self.transform:
             sample = self.transform(sample)
+
+         # Standardises 2d & 3d Keypoints
+        sample['key_points_2D'] = self.normal_2d(sample['key_points_2D'])
+        sample['key_points_3D'] = self.normal_3d(sample['key_points_3D'])
         return sample
 
     def scale_data(self,sample):
@@ -160,11 +162,11 @@ class BugDataset(Dataset):
         return sample
 
     def normal_2d(self, x):
-        np.seterr(invalid='ignore')
-        return np.nan_to_num((x-self.means_2d)/self.std_2d)
+        # np.seterr(invalid='ignore')
+        return torch.nan_to_num((x-torch.Tensor(self.means_2d))/torch.Tensor(self.std_2d))
     def normal_3d(self, x):
-        np.seterr(invalid='ignore')
-        return np.nan_to_num((x-self.means_3d)/self.std_3d)
+        # np.seterr(invalid='ignore')
+        return torch.nan_to_num((x-torch.Tensor(self.means_3d))/torch.Tensor(self.std_3d))
 
     def calculate_normalise_data(self, df):
         if self.reduced:
