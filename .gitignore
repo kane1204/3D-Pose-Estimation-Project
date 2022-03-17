@@ -9,3 +9,4 @@ models/estimator2d.pt
 notebooks/src/eval/__pycache__/accuracies.cpython-38.pyc
 notebooks/src/eval/__pycache__/loss.cpython-38.pyc
 results/*
+notebooks/src/models/__pycache__/*
