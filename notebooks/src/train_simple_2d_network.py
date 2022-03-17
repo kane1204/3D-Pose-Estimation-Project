@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import torch
 from tqdm.notebook import tqdm
 from src.eval.loss import JointsMSELoss
@@ -76,11 +77,11 @@ class Train_simple_2d_Network():
         
     def run(self, epochs):
         torch.cuda.empty_cache()
-        import time
+        
         timestr = time.strftime("%Y%m%d-%H%M%S")
         file_desc = f"simple_2d_model_{timestr}"
         for t in tqdm(range(1, epochs+1), desc="Simple 2D Model Epochs"):
-            # print(f'Epoch {t+0:03}:')
+            
             train_acc, train_loss, val_acc, val_loss  = 0,0,0,0
 
             train_acc, train_loss = self.train_step()
