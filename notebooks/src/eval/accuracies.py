@@ -101,7 +101,7 @@ def get_max_preds(batch_heatmaps):
     return preds, maxvals
 
 
-def keypoint_3d_pck(pred, gt, mask, alignment='none', threshold=0.15):
+def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=30.0):
     """Calculate the Percentage of Correct Keypoints (3DPCK) w. or w/o rigid
     alignment.
     Paper ref: `Monocular 3D Human Pose Estimation In The Wild Using Improved
@@ -125,29 +125,34 @@ def keypoint_3d_pck(pred, gt, mask, alignment='none', threshold=0.15):
                 rotation and translation.
         threshold:  If L2 distance between the prediction and the groundtruth
             is less then threshold, the predicted result is considered as
-            correct. Default: 0.15 (m).
+            correct. Default: 0.15 (pixels).
     Returns:
         pck: percentage of correct keypoints.
     """
     assert mask.any()
+    mask = mask.astype(np.bool)
+    # TODO: Check why this un normalise breaks the function
+    pred_norm = (pred*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
+    gt_norm = (gt*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
+
 
     if alignment == 'none':
         pass
     elif alignment == 'procrustes':
-        pred = np.stack([
+        pred_norm = np.stack([
             compute_similarity_transform(pred_i, gt_i)
-            for pred_i, gt_i in zip(pred, gt)
+            for pred_i, gt_i in zip(pred_norm, gt_norm)
         ])
     elif alignment == 'scale':
-        pred_dot_pred = np.einsum('nkc,nkc->n', pred, pred)
-        pred_dot_gt = np.einsum('nkc,nkc->n', pred, gt)
+        pred_dot_pred = np.einsum('nkc,nkc->n', pred_norm, pred_norm)
+        pred_dot_gt = np.einsum('nkc,nkc->n', pred_norm, gt_norm)
         scale_factor = pred_dot_gt / pred_dot_pred
-        pred = pred * scale_factor[:, None, None]
+        pred_norm = pred_norm * scale_factor[:, None, None]
     else:
         raise ValueError(f'Invalid value for alignment: {alignment}')
 
-    error = np.linalg.norm(pred - gt, ord=2, axis=-1)
-    pck = (error < threshold).astype(np.float32)[mask].mean() * 100
+    error = np.linalg.norm(pred_norm - gt_norm, ord=2, axis=-1)
+    pck = (error < threshold).astype(np.float32)[mask].mean()
 
     return pck
 

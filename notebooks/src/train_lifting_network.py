@@ -4,19 +4,20 @@ from tqdm.notebook import tqdm
 import torch.nn as nn
 import gc
 import time
-
-from notebooks.src.eval.accuracies import keypoint_3d_pck
+from src.eval.loss import JointsMSELoss
+from src.eval.accuracies import keypoint_3d_pck
 class Train_LiftNetwork():
-    def __init__(self,model,optimiser,accurate_dist,train_dataloader,valid_dataloader):
+    def __init__(self,model,optimiser,train_dataloader,valid_dataloader, std, means):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Using {} device".format(self.device))   
         self.model = model.to(self.device)
         
         self.optimiser = optimiser
-        self.accz_dists = accurate_dist
         self.train_ds = train_dataloader
         self.valid_ds = valid_dataloader
-        
+        self.means=means
+        self.stds = std
+        self.criterion = JointsMSELoss(use_target_weight=True)
     def train_step(self):
         train_epoch_acc, train_epoch_loss = 0, 0
         batches = 0
@@ -25,34 +26,37 @@ class Train_LiftNetwork():
             X = data['key_points_2D']
             y = data['key_points_3D'] # 3d
             mask = data['visibility'].to(self.device)
-            
+            heat_weight = data['heat_weight'].to(self.device)
             X, y = X.to(self.device, dtype=torch.float), y.to(self.device, dtype=torch.float)
             # 3dim to unflatten reshape((batch,limbs,3))
             X_flattened = torch.flatten(X, start_dim=1, end_dim=2)
             y_flattened  = torch.flatten(y, start_dim=1, end_dim=2)
-            mask_flattened = torch.flatten(torch.stack([mask,mask,mask],dim=1),start_dim=1, end_dim= 2)
-
+            
             pred = self.model(X_flattened)
 
-            train_loss = torch.mean(((pred - y_flattened)*mask_flattened)**2)
+            # mask_flattened = torch.flatten(torch.stack([mask,mask,mask],dim=1),start_dim=1, end_dim= 2)
+            # train_loss = torch.mean(((pred - y_flattened)*mask_flattened)**2)
+            # print(heat_weight)
+            train_loss = self.criterion(pred.reshape((len(pred),28,3)),y, heat_weight)
             train_acc = keypoint_3d_pck(pred.detach().cpu().numpy().reshape((len(pred),28,3)),
-                                        y.detach().cpu().numpy(), mask)
-
+                                        y.detach().cpu().numpy(), mask.detach().cpu().numpy(),
+                                        self.stds, self.means)
+            # print(train_acc)
             # Backpropagation
             self.optimiser.zero_grad()
             train_loss.backward()
             self.optimiser.step()
             
             train_epoch_loss += train_loss.item()
-            train_epoch_acc += train_acc.item()
+            train_epoch_acc += train_acc
             batches += 1
             # Stops training after one batch
             # break
 
         # Normal calculation
-            train_acc = train_epoch_acc/batches
-            train_loss = train_epoch_loss/batches
-            return train_acc, train_loss
+        train_acc = train_epoch_acc/batches
+        train_loss = train_epoch_loss/batches
+        return train_acc, train_loss
 
     def valid_step(self):
         val_epoch_acc, val_epoch_loss = 0, 0
@@ -74,11 +78,12 @@ class Train_LiftNetwork():
 
                 val_loss = torch.mean(((pred - y_flattened)*mask_flattened)**2)
                 val_acc = keypoint_3d_pck(pred.detach().cpu().numpy().reshape((len(pred),28,3)),
-                                        y.detach().cpu().numpy(), mask)
+                                          y.detach().cpu().numpy(), mask.detach().cpu().numpy(),
+                                          self.stds, self.means)
                 val_epoch_loss += val_loss.item()
                 val_epoch_acc += val_acc.item()
                 batches +=1
-
+                # break
 
         val_acc = val_epoch_acc/batches
         val_loss = val_epoch_loss/batches
