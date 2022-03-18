@@ -66,6 +66,7 @@ class Train_LiftNetwork():
             for data in tqdm(self.valid_ds, desc="Validation Step", disable=True):
                 X = data['key_points_2D']
                 y = data['key_points_3D'] # 3d
+                heat_weight = data['heat_weight'].to(self.device)
                 mask = data['visibility'].to(self.device)
 
                 X, y = X.to(self.device, dtype=torch.float), y.to(self.device, dtype=torch.float)
@@ -76,10 +77,11 @@ class Train_LiftNetwork():
 
                 pred = self.model(X_flattened)
 
-                val_loss = torch.mean(((pred - y_flattened)*mask_flattened)**2)
+                val_loss = self.criterion(pred.reshape((len(pred),28,3)),y, heat_weight)
                 val_acc = keypoint_3d_pck(pred.detach().cpu().numpy().reshape((len(pred),28,3)),
                                           y.detach().cpu().numpy(), mask.detach().cpu().numpy(),
                                           self.stds, self.means)
+                                          
                 val_epoch_loss += val_loss.item()
                 val_epoch_acc += val_acc.item()
                 batches +=1
