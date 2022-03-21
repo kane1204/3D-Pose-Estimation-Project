@@ -1,4 +1,5 @@
 import random
+import torchvision
 import cv2
 class RandomHorizontalFlip(object):
     """Random horizontal flip the image.
@@ -53,4 +54,16 @@ class RandomVerticallFlip(object):
             sample['heatmap'] = heatmaps
             sample['key_points_2D'] = kpt
             return sample
+        return sample
+
+class RandomColourShifts(object):
+    """Randomly Colour shifts the image"""
+
+    def __init__(self, prob=0.5):
+        self.prob = prob
+    def __call__(self,sample):
+        # if random.random() < self.prob:
+        color_jitter = torchvision.transforms.ColorJitter(contrast =0.5,saturation=0.5)
+        img = sample['image']
+        sample['image'] = color_jitter(img)
         return sample

@@ -92,7 +92,7 @@ class Train_simple_2d_Network():
             self.append_file(f"{file_desc}_train_acc", train_acc)
             self.append_file(f"{file_desc}_val_loss", val_loss)
             self.append_file(f"{file_desc}_val_acc", val_acc)
-            path = f"../models/2d_horiz_vertical_flip/{file_desc}_{t}"
+            path = f"../models/2d_horiz_vert_colourshift/{file_desc}_{t}"
             torch.save(self.model.state_dict(), path)
             print(f'Finished Epoch {t+0:03}: | Train Acc: {train_acc:.3f} | Train Loss: {train_loss:.5f} | Val Acc: {val_acc:.3f} | Val Loss: {val_loss:.5f}')
             
