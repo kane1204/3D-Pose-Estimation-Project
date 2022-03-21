@@ -101,7 +101,7 @@ def get_max_preds(batch_heatmaps):
     return preds, maxvals
 
 
-def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=30.0):
+def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=20.0):
     """Calculate the Percentage of Correct Keypoints (3DPCK) w. or w/o rigid
     alignment.
     Paper ref: `Monocular 3D Human Pose Estimation In The Wild Using Improved

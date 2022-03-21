@@ -4,6 +4,7 @@ from tqdm.notebook import tqdm
 import torch.nn as nn
 import gc
 import time
+import torch.optim as optim
 from src.eval.loss import JointsMSELoss
 from src.eval.accuracies import keypoint_3d_pck
 class Train_LiftNetwork():
@@ -11,14 +12,19 @@ class Train_LiftNetwork():
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Using {} device".format(self.device))   
         self.model = model.to(self.device)
-        
+
         self.optimiser = optimiser
+        gamma = 0.96
+        decay_step = 100000
+        self.lr_scheduler =  optim.lr_scheduler.LambdaLR(self.optimiser, lr_lambda=lambda step: gamma ** (step / decay_step))
         self.train_ds = train_dataloader
         self.valid_ds = valid_dataloader
         self.means=means
         self.stds = std
         self.criterion = JointsMSELoss(use_target_weight=True)
+        # self.criterion = nn.MSELoss(size_average=True)
     def train_step(self):
+        max_norm =True
         train_epoch_acc, train_epoch_loss = 0, 0
         batches = 0
         self.model.train()
@@ -30,22 +36,21 @@ class Train_LiftNetwork():
             X, y = X.to(self.device, dtype=torch.float), y.to(self.device, dtype=torch.float)
             # 3dim to unflatten reshape((batch,limbs,3))
             X_flattened = torch.flatten(X, start_dim=1, end_dim=2)
-            y_flattened  = torch.flatten(y, start_dim=1, end_dim=2)
             
             pred = self.model(X_flattened)
 
-            # mask_flattened = torch.flatten(torch.stack([mask,mask,mask],dim=1),start_dim=1, end_dim= 2)
-            # train_loss = torch.mean(((pred - y_flattened)*mask_flattened)**2)
-            # print(heat_weight)
-            train_loss = self.criterion(pred.reshape((len(pred),28,3)),y, heat_weight)
+            train_loss = self.criterion(pred.reshape((len(pred),28,3)),y, heat_weight) # 
             train_acc = keypoint_3d_pck(pred.detach().cpu().numpy().reshape((len(pred),28,3)),
                                         y.detach().cpu().numpy(), mask.detach().cpu().numpy(),
                                         self.stds, self.means)
-            # print(train_acc)
+            # print(train_loss)
             # Backpropagation
             self.optimiser.zero_grad()
             train_loss.backward()
+            if max_norm:
+                nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
             self.optimiser.step()
+            self.lr_scheduler.step()
             
             train_epoch_loss += train_loss.item()
             train_epoch_acc += train_acc
