@@ -52,7 +52,7 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
         h = output.shape[2]
         w = output.shape[3]
         norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
-    dists = calc_dists(pred, target, norm)
+    dists = calc_dists(pred, target, norm, thr)
 
     acc = np.zeros((len(idx) + 1))
     avg_acc = 0
@@ -101,7 +101,7 @@ def get_max_preds(batch_heatmaps):
     return preds, maxvals
 
 
-def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=20.0):
+def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=5.0):
     """Calculate the Percentage of Correct Keypoints (3DPCK) w. or w/o rigid
     alignment.
     Paper ref: `Monocular 3D Human Pose Estimation In The Wild Using Improved
@@ -131,7 +131,7 @@ def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=20.
     """
     assert mask.any()
     mask = mask.astype(np.bool)
-    # TODO: Check why this un normalise breaks the function
+    
     pred_norm = (pred*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
     gt_norm = (gt*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
 
@@ -150,11 +150,36 @@ def keypoint_3d_pck(pred, gt, mask, stds, means, alignment='none', threshold=20.
         pred_norm = pred_norm * scale_factor[:, None, None]
     else:
         raise ValueError(f'Invalid value for alignment: {alignment}')
-
+    #  For depth function axis=-1 else ord = 2
     error = np.linalg.norm(pred_norm - gt_norm, ord=2, axis=-1)
+    # error = np.absolute(pred_norm-gt_norm)
     pck = (error < threshold).astype(np.float32)[mask].mean()
 
     return pck
+
+
+
+def keypoint_depth_pck(pred, gt, mask, stds, means, alignment='none', threshold=5.0):
+    """Calculate the Percentage of Correct Keypoints (PCK)
+    Returns:
+        pck: percentage of correct keypoints.
+    """
+    assert mask.any()
+    mask = mask.astype(np.bool)
+    
+    pred_norm = (pred*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
+    gt_norm = (gt*np.stack([stds]*len(pred)))+np.stack([means]*len(pred))
+
+    if alignment == 'none':
+        pass
+    else:
+        raise ValueError(f'Invalid value for alignment: {alignment}')
+    #  For depth function axis=-1 else ord = 2
+    error = np.absolute(pred_norm-gt_norm)
+    pck = (error < threshold).astype(np.float32)[mask].mean()
+
+    return pck
+
 
 # ------------------------------------------------------------------------------
 # Adapted from https://github.com/akanazawa/hmr
