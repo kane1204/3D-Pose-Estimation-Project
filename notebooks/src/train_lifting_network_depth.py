@@ -37,7 +37,7 @@ class Train_LiftNetwork():
             pred = self.model(X_flattened)
 
             train_loss = torch.mean(((pred - y)*mask)**2) # 
-            train_acc = keypoint_depth_pck(pred.detach().cpu().numpy(),
+            train_acc,_ = keypoint_depth_pck(pred.detach().cpu().numpy(),
                                         y.detach().cpu().numpy(),
                                         mask.detach().cpu().numpy(),
                                         self.stds[:,2], self.means[:,2])
@@ -77,7 +77,7 @@ class Train_LiftNetwork():
                 pred = self.model(X_flattened)
 
                 val_loss = torch.mean(((pred - y)*mask)**2) # 
-                val_acc = keypoint_depth_pck(pred.detach().cpu().numpy(),
+                val_acc,_ = keypoint_depth_pck(pred.detach().cpu().numpy(),
                                           y.detach().cpu().numpy(), 
                                           mask.detach().cpu().numpy(),
                                           self.stds[:,2], self.means[:,2])

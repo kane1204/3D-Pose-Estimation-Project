@@ -176,9 +176,17 @@ def keypoint_depth_pck(pred, gt, mask, stds, means, alignment='none', threshold=
         raise ValueError(f'Invalid value for alignment: {alignment}')
     #  For depth function axis=-1 else ord = 2
     error = np.absolute(pred_norm-gt_norm)
-    pck = (error < threshold).astype(np.float32)[mask].mean()
+    pck_all = (error < threshold).astype(np.float32)[mask].mean()
 
-    return pck
+    kps = np.sum((error < threshold).astype(np.float32), axis=0)
+    kps_vis = np.sum(mask.astype(np.float32),axis=0)
+
+    for x in range(len(kps)):
+        if kps[x] > kps_vis[x]:
+            kps[x] = kps_vis[x]
+    pckperkp = kps/kps_vis
+
+    return pck_all, pckperkp
 
 
 # ------------------------------------------------------------------------------
