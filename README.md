@@ -1,4 +1,4 @@
-# 3D Pose Estimation Project
+# 3D Monocular Pose Estimation from Synthetic Data
 This is the first part of my masters project
 ## Abstract
 3D pose estimation has been a very popular part of computer vision for a long time
